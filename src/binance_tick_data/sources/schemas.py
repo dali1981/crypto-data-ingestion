@@ -20,6 +20,21 @@ class Trade(BaseModel):
     class Config:
         populate_by_name = True
 
+    @property
+    def isBuyerMaker(self) -> bool:
+        """Backward compatibility property for camelCase access."""
+        return self.is_buyer_maker
+
+    @property
+    def isBestMatch(self) -> bool:
+        """Backward compatibility property for camelCase access."""
+        return self.is_best_match
+
+    @property
+    def quoteQty(self) -> str:
+        """Backward compatibility property for camelCase access."""
+        return self.quote_qty
+
 
 class AggTrade(BaseModel):
     """Aggregated trade schema."""
@@ -57,10 +72,11 @@ class StreamTrade(BaseModel):
     trade_id: int = Field(..., alias="t", description="Trade ID")
     price: str = Field(..., alias="p", description="Price")
     quantity: str = Field(..., alias="q", description="Quantity")
-    buyer_order_id: int = Field(..., alias="b", description="Buyer order ID")
-    seller_order_id: int = Field(..., alias="a", description="Seller order ID")
+    buyer_order_id: Optional[int] = Field(None, alias="b", description="Buyer order ID")
+    seller_order_id: Optional[int] = Field(None, alias="a", description="Seller order ID")
     trade_time: int = Field(..., alias="T", description="Trade time")
     is_buyer_maker: bool = Field(..., alias="m", description="Is buyer maker")
+    is_best_match: bool = Field(..., alias="M", description="Is best price match")
 
     class Config:
         populate_by_name = True
