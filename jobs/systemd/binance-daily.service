@@ -1,0 +1,18 @@
+[Unit]
+Description=Binance Daily Data Maintenance
+After=network.target
+
+[Service]
+Type=oneshot
+User=mohamedali
+WorkingDirectory=/Users/mohamedali/trading_project/dlt-starter
+ExecStart=/usr/bin/env uv run python jobs/daily_job.py --symbol BTCUSDT
+StandardOutput=append:/var/log/binance-daily.log
+StandardError=append:/var/log/binance-daily.error.log
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10min
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,6 @@
+# Ignore generated reports
+reports/
+*.pyc
+__pycache__/
+.pytest_cache/
+*.log

@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Binance daily data maintenance
+Requires=binance-daily.service
+
+[Timer]
+# Run daily at 2 AM
+OnCalendar=*-*-* 02:00:00
+
+# Run 5 minutes after boot if missed
+Persistent=true
+
+[Install]
+WantedBy=timers.target
