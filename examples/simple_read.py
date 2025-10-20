@@ -4,7 +4,7 @@ Simple example: Read data from your Binance database
 Copy this file and modify it for your needs!
 """
 
-from binance_tick_data.repository import BinanceDataRepository
+from binance_tick_data import BinanceDataRepository
 from datetime import datetime, timedelta
 
 # =============================================================================

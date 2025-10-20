@@ -17,7 +17,7 @@ from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 
-from binance_tick_data.repository import BinanceDataRepository
+from binance_tick_data import BinanceDataRepository
 
 plt.style.use('seaborn-v0_8-darkgrid')
 
