@@ -8,7 +8,7 @@ Features:
 - Type-safe operations with Pydantic
 """
 
-from typing import List, Optional, Union, Tuple
+from typing import List, Optional, Union, Tuple, Dict, Any
 from datetime import datetime, timedelta
 from pathlib import Path
 import duckdb
@@ -580,3 +580,294 @@ class BinanceDataRepository:
                 summary[table_name] = {"exists": False}
 
         return summary
+
+    # =========================================================================
+    # Streaming / Real-Time Query Methods
+    # =========================================================================
+
+    def get_recent_window(
+        self,
+        symbol: str,
+        seconds: int = 60,
+        as_dataframe: bool = True
+    ) -> Union[pd.DataFrame, List[Tuple]]:
+        """
+        Get trades from the last N seconds (optimized for repeated calls).
+
+        Hot path for real-time analysis - fetches recent data with query caching.
+
+        Args:
+            symbol: Trading symbol
+            seconds: Number of seconds to look back
+            as_dataframe: Return as pandas DataFrame
+
+        Returns:
+            Recent trades within the time window
+
+        Examples:
+            >>> with BinanceDataRepository() as repo:
+            ...     # Get last 60 seconds of trades
+            ...     recent = repo.get_recent_window("BTCUSDT", seconds=60)
+        """
+        cutoff_time = datetime.now() - timedelta(seconds=seconds)
+        return self.get_agg_trades(
+            symbol=symbol,
+            start_time=cutoff_time,
+            as_dataframe=as_dataframe
+        )
+
+    def stream_trades_since(
+        self,
+        symbol: str,
+        timestamp: datetime,
+        batch_size: int = 1000
+    ):
+        """
+        Stream trades incrementally since a timestamp.
+
+        Yields batches of trades, useful for incremental processing without
+        loading all data into memory at once.
+
+        Args:
+            symbol: Trading symbol
+            timestamp: Start timestamp
+            batch_size: Number of trades per batch
+
+        Yields:
+            DataFrames with batches of trades
+
+        Examples:
+            >>> with BinanceDataRepository() as repo:
+            ...     for batch in repo.stream_trades_since("BTCUSDT", timestamp):
+            ...         process_batch(batch)
+        """
+        table_path = self.config.database.get_table_path("agg_trades")
+        timestamp_ms = int(timestamp.timestamp() * 1000)
+
+        query = f"""
+            SELECT *
+            FROM {table_path}
+            WHERE symbol = ?
+              AND timestamp >= ?
+            ORDER BY timestamp
+        """
+
+        # Stream results in batches
+        offset = 0
+        while True:
+            paginated_query = f"{query} LIMIT {batch_size} OFFSET {offset}"
+            result = self.conn.execute(paginated_query, [symbol, timestamp_ms]).fetchdf()
+
+            if result.empty:
+                break
+
+            yield result
+            offset += batch_size
+
+    def get_live_orderbook(
+        self,
+        symbol: str,
+        depth: int = 10
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get the most recent order book snapshot.
+
+        Args:
+            symbol: Trading symbol
+            depth: Number of levels to include
+
+        Returns:
+            Most recent order book or None if not found
+
+        Examples:
+            >>> with BinanceDataRepository() as repo:
+            ...     book = repo.get_live_orderbook("BTCUSDT", depth=10)
+            ...     print(f"Best bid: {book['bids'][0]}")
+        """
+        table_path = self.config.database.get_table_path("order_book_snapshots")
+
+        try:
+            query = f"""
+                SELECT *
+                FROM {table_path}
+                WHERE symbol = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """
+            result = self.conn.execute(query, [symbol]).fetchone()
+
+            if not result:
+                return None
+
+            # Parse the result
+            return {
+                "symbol": result[0],
+                "timestamp": datetime.fromtimestamp(result[1] / 1000),
+                "last_update_id": result[2],
+                "bids": result[3][:depth] if result[3] else [],
+                "asks": result[4][:depth] if result[4] else [],
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching order book: {e}")
+            return None
+
+    def get_realtime_vwap(
+        self,
+        symbol: str,
+        window_seconds: int = 60
+    ) -> Optional[float]:
+        """
+        Compute VWAP for recent window.
+
+        Args:
+            symbol: Trading symbol
+            window_seconds: Time window in seconds
+
+        Returns:
+            VWAP or None if no data
+
+        Examples:
+            >>> with BinanceDataRepository() as repo:
+            ...     vwap = repo.get_realtime_vwap("BTCUSDT", window_seconds=60)
+        """
+        try:
+            df = self.get_recent_window(symbol, seconds=window_seconds, as_dataframe=True)
+
+            if df.empty:
+                return None
+
+            df['price'] = df['price'].astype(float)
+            df['quantity'] = df['quantity'].astype(float)
+            df['dollar_volume'] = df['price'] * df['quantity']
+
+            vwap = df['dollar_volume'].sum() / df['quantity'].sum()
+            return float(vwap)
+
+        except Exception as e:
+            logger.error(f"Error computing VWAP: {e}")
+            return None
+
+    def get_streaming_stats(
+        self,
+        symbol: str,
+        window_seconds: int = 60
+    ) -> Dict[str, Any]:
+        """
+        Get real-time market statistics for recent window.
+
+        Computes various metrics including price stats, volume, trade counts,
+        and buy/sell ratios.
+
+        Args:
+            symbol: Trading symbol
+            window_seconds: Time window in seconds
+
+        Returns:
+            Dictionary with market statistics
+
+        Examples:
+            >>> with BinanceDataRepository() as repo:
+            ...     stats = repo.get_streaming_stats("BTCUSDT", window_seconds=60)
+            ...     print(f"Trade count: {stats['trade_count']}")
+            ...     print(f"Buy/Sell ratio: {stats['buy_sell_ratio']}")
+        """
+        try:
+            df = self.get_recent_window(symbol, seconds=window_seconds, as_dataframe=True)
+
+            if df.empty:
+                return {
+                    "symbol": symbol,
+                    "window_seconds": window_seconds,
+                    "trade_count": 0,
+                    "error": "No data available"
+                }
+
+            df['price'] = df['price'].astype(float)
+            df['quantity'] = df['quantity'].astype(float)
+
+            # Compute statistics
+            buy_trades = df[df['is_buyer_maker'] == False]
+            sell_trades = df[df['is_buyer_maker'] == True]
+
+            stats = {
+                "symbol": symbol,
+                "window_seconds": window_seconds,
+                "trade_count": len(df),
+                "total_volume": float(df['quantity'].sum()),
+                "price_mean": float(df['price'].mean()),
+                "price_std": float(df['price'].std()),
+                "price_min": float(df['price'].min()),
+                "price_max": float(df['price'].max()),
+                "price_range": float(df['price'].max() - df['price'].min()),
+                "buy_count": len(buy_trades),
+                "sell_count": len(sell_trades),
+                "buy_volume": float(buy_trades['quantity'].sum()) if len(buy_trades) > 0 else 0.0,
+                "sell_volume": float(sell_trades['quantity'].sum()) if len(sell_trades) > 0 else 0.0,
+                "buy_sell_ratio": len(buy_trades) / len(sell_trades) if len(sell_trades) > 0 else float('inf'),
+                "volume_buy_sell_ratio": (
+                    float(buy_trades['quantity'].sum() / sell_trades['quantity'].sum())
+                    if len(sell_trades) > 0 and sell_trades['quantity'].sum() > 0
+                    else float('inf')
+                ),
+            }
+
+            # Add VWAP
+            df['dollar_volume'] = df['price'] * df['quantity']
+            stats['vwap'] = float(df['dollar_volume'].sum() / df['quantity'].sum())
+
+            return stats
+
+        except Exception as e:
+            logger.error(f"Error computing streaming stats: {e}")
+            return {
+                "symbol": symbol,
+                "window_seconds": window_seconds,
+                "error": str(e)
+            }
+
+    def get_realtime_trades(
+        self,
+        symbol: str,
+        limit: int = 100,
+        as_dataframe: bool = True
+    ) -> Union[pd.DataFrame, List[Tuple]]:
+        """
+        Get the most recent N trades from real-time table.
+
+        Fetches from the realtime_trades table which is populated by
+        the WebSocket streaming pipeline.
+
+        Args:
+            symbol: Trading symbol
+            limit: Maximum number of trades to return
+            as_dataframe: Return as pandas DataFrame
+
+        Returns:
+            Recent real-time trades
+
+        Examples:
+            >>> with BinanceDataRepository() as repo:
+            ...     latest = repo.get_realtime_trades("BTCUSDT", limit=100)
+        """
+        table_path = self.config.database.get_table_path("realtime_trades")
+
+        query = f"""
+            SELECT *
+            FROM {table_path}
+            WHERE symbol = ?
+            ORDER BY trade_time DESC
+            LIMIT ?
+        """
+
+        try:
+            if as_dataframe:
+                return self.conn.execute(query, [symbol, limit]).fetchdf()
+            else:
+                return self.conn.execute(query, [symbol, limit]).fetchall()
+        except Exception as e:
+            logger.error(f"Error fetching realtime trades: {e}")
+            if as_dataframe:
+                return pd.DataFrame()
+            else:
+                return []

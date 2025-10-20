@@ -9,6 +9,7 @@ dependencies = [
     "fracdiff>=0.9.0",
     "jupyter>=1.1.1",
     "matplotlib>=3.10.7",
+    "numba>=0.62.1",
     "omegaconf>=2.3.0",
     "pandas>=2.3.3",
     "plotly>=6.3.1",
@@ -32,6 +33,8 @@ packages = ["src/binance_tick_data"]
 [dependency-groups]
 dev = [
     "fracdiff>=0.9.0",
+    "pytest>=8.4.2",
+    "seaborn>=0.13.2",
 ]
 
 [project.scripts]

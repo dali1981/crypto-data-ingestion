@@ -1,340 +1,314 @@
-# Project Structure - Complete
+# Project Structure
 
-## Overview
+Complete directory structure for the Binance Tick Data platform.
+
+## Directory Tree
 
 ```
 dlt-starter/
-├── 📚 docs/                           # Documentation
-│   ├── README.md                      # Documentation index
-│   ├── JOBS_QUICK_START.md            # 5-minute quick start
-│   ├── SOLUTION_SUMMARY.md            # Complete solution
-│   └── DATA_QUALITY_REPORT.md         # Original analysis
+├── src/                          # Source code
+│   └── binance_tick_data/
+│       ├── __init__.py
+│       ├── analyzers/            # Market microstructure analyzers
+│       │   ├── base_analyzer.py
+│       │   ├── order_flow.py
+│       │   ├── liquidity.py
+│       │   └── volume_profile.py
+│       ├── consumers/            # Real-time consumers
+│       │   ├── consumer_config.py
+│       │   └── realtime_consumer.py
+│       ├── streaming/            # Streaming infrastructure
+│       │   ├── ring_buffer.py
+│       │   ├── metrics_aggregator.py
+│       │   └── event_publisher.py
+│       ├── sources/              # Data sources
+│       │   ├── rest_api.py
+│       │   ├── websocket.py
+│       │   └── schemas.py
+│       ├── pipelines/            # Data pipelines
+│       │   ├── historical_pipeline.py
+│       │   ├── incremental_pipeline.py
+│       │   └── realtime_pipeline.py
+│       ├── config.py             # Legacy config
+│       ├── db_config.py          # Database configuration
+│       ├── errors.py             # Error definitions
+│       ├── repository_v2.py      # Data repository
+│       └── ...
 │
-├── 🔧 jobs/                           # Data quality jobs
-│   ├── 01_data_quality_assessment.py  # Quality checker
-│   ├── 02_deduplication.py            # Duplicate remover
-│   ├── 03_fill_gaps.py                # Gap filler ⭐
-│   ├── run_all_jobs.py                # Job orchestrator
-│   ├── daily_job.py                   # Daily automation
-│   ├── README.md                      # Jobs documentation
-│   ├── .gitignore
-│   ├── reports/                       # Generated reports
-│   │   └── *.json
-│   └── systemd/                       # Systemd configs
+├── examples/                     # Usage examples
+│   ├── simple_streaming_example.py
+│   ├── custom_analyzer_example.py
+│   ├── realtime_monitoring.py
+│   ├── realtime_analysis.ipynb
+│   ├── simple_read.py
+│   ├── using_repository.py
+│   ├── dollar_bars_example.py
+│   ├── data_analysis.ipynb
+│   ├── data_analysis.py
+│   └── test_new_system.py
+│
+├── jobs/                         # Data quality jobs
+│   ├── 01_data_quality_assessment.py
+│   ├── 02_deduplication.py
+│   ├── 03_fill_gaps.py
+│   ├── run_all_jobs.py
+│   ├── daily_job.py
+│   ├── README.md
+│   └── systemd/
 │       ├── binance-daily.service
 │       └── binance-daily.timer
 │
-├── 📦 src/binance_tick_data/          # Main library
-│   ├── __init__.py
-│   ├── config.py
-│   ├── db_config.py                   # New config system
-│   ├── errors.py                      # Error hierarchy
-│   ├── repository_v2.py               # New repository ⭐
-│   ├── repository.py                  # Legacy
-│   ├── sources/
-│   │   ├── __init__.py
-│   │   ├── rest_api.py                # Historical data (append mode)
-│   │   ├── websocket.py               # Real-time data
-│   │   └── schemas.py
-│   └── pipelines/
-│       ├── historical_pipeline.py
-│       └── realtime_pipeline.py
+├── docs/                         # Documentation
+│   ├── README.md                 # Documentation index
+│   ├── QUICK_START.md            # Core platform guide
+│   ├── GETTING_STARTED_STREAMING.md  # Streaming guide
+│   ├── JOBS_QUICK_START.md       # Data quality guide
+│   ├── ADAPTIVE_CHUNKING.md
+│   ├── SMART_GAP_FILLING.md
+│   ├── DATA_QUALITY_REPORT.md
+│   ├── SOLUTION_SUMMARY.md
+│   └── legacy/                   # Historical documentation
+│       ├── ALTERNATIVES.md
+│       ├── DATA_MANAGEMENT.md
+│       ├── IMPLEMENTATION_COMPLETE.md
+│       ├── INSTALLATION.md
+│       ├── MIGRATION_GUIDE.md
+│       ├── PROJECT_STRUCTURE.md
+│       ├── PROJECT_SUMMARY.md
+│       ├── QUICKSTART.md
+│       ├── REPOSITORY_GUIDE.md
+│       ├── STORAGE_COMPARISON.md
+│       ├── SUCCESS_SUMMARY.md
+│       └── VERIFICATION_COMPLETE.md
 │
-├── 📊 examples/                       # Usage examples
-│   ├── simple_read.py
-│   ├── data_analysis.py
-│   ├── dollar_bars_example.py
-│   └── test_new_system.py
+├── specs/                        # Architecture specifications
+│   ├── STREAMING_INTEGRATION_PLAN.md
+│   ├── STREAMING_IMPLEMENTATION_SUMMARY.md
+│   └── PHASE_4_COMPLETE.md
 │
-├── 🔍 Analysis Tools/                 # Manual tools
-│   ├── data_gap_analysis.py           # Manual analysis
-│   └── fix_data_issues.py             # Manual fixes
+├── scripts/                      # Utility scripts
+│   ├── test_setup.py
+│   ├── test_notebook_fix.py
+│   ├── test_readonly_fix.py
+│   ├── test_smart_gap_detection.py
+│   ├── fix_data_issues.py
+│   └── data_gap_analysis.py
 │
-├── 📄 Documentation/                  # Project docs
-│   ├── README.md                      # Main README
-│   ├── IMPLEMENTATION_COMPLETE.md     # Implementation summary
-│   ├── PROJECT_STRUCTURE.md           # This file
-│   ├── INSTALLATION.md
-│   ├── QUICK_START.md
-│   ├── MIGRATION_GUIDE.md
-│   └── ...other docs...
+├── analysis_output/              # Analysis results
+│   ├── btc_price_returns.png
+│   ├── btc_fracdiff_series.png
+│   ├── btc_distributions.png
+│   ├── btc_qq_plots.png
+│   ├── btc_fracdiff_analysis.csv
+│   ├── dollar_bars_analysis.png
+│   └── dollar_bars.csv
 │
-├── ⚙️ Configuration/
-│   ├── config.yaml                    # Pipeline config
-│   ├── pyproject.toml                 # Dependencies
-│   └── uv.lock
+├── data/                         # Data directory (empty, runtime)
 │
-└── 💾 Database/
-    └── binance_pipeline.duckdb        # DuckDB database
+├── .venv/                        # Virtual environment
+│
+├── binance_pipeline.duckdb       # Main database
+├── binance_gap_filler.duckdb     # Gap filling database
+│
+├── config.yaml                   # Main configuration
+├── config.toml                   # DLT configuration
+├── pyproject.toml                # Project metadata
+├── uv.lock                       # Dependency lock file
+│
+├── README.md                     # Main project README
+├── README_STREAMING.md           # Streaming platform README
+├── PROJECT_STRUCTURE.md          # This file
+│
+└── .gitignore                    # Git ignore rules
 ```
-
----
 
 ## Key Directories
 
-### 📚 docs/
-Complete documentation for data quality system
-- Quick start guide
-- Architecture documentation
-- Analysis reports
+### `/src/binance_tick_data/`
+**Core library code**
+- `analyzers/` - Market microstructure analyzers
+- `consumers/` - Real-time data consumers
+- `streaming/` - Streaming infrastructure (buffers, aggregators)
+- `sources/` - Data sources (REST API, WebSocket)
+- `pipelines/` - Data ingestion pipelines
+- `repository_v2.py` - Main data access layer
 
-### 🔧 jobs/
-**Most important directory** - Data quality management
-- 5 automated jobs
-- Orchestration
+**Total:** ~5,800 lines of production code
+
+### `/examples/`
+**Complete working examples**
+- Simple streaming example
+- Custom analyzer examples
+- CLI monitoring dashboard
+- Jupyter notebooks
+- Repository usage examples
+
+**Total:** 4 Python scripts + 2 notebooks
+
+### `/jobs/`
+**Data quality maintenance**
+- Quality assessment
+- Deduplication
+- Gap filling
 - Daily automation
-- Systemd configs
+- Systemd service files
 
-### 📦 src/binance_tick_data/
-Main library code
-- Data sources (REST API, WebSocket)
-- Repository (data access)
-- Configuration
-- Error handling
+**Total:** 5 job scripts
 
-### 📊 examples/
-Example usage scripts
-- Simple reading
-- Data analysis
-- Dollar bars
-- Testing
+### `/docs/`
+**Comprehensive documentation**
+- Quick start guides (3)
+- Technical documentation (4)
+- Legacy documentation (12)
 
----
+**Total:** ~3,000 lines of documentation
 
-## Important Files
+### `/specs/`
+**Architecture specifications**
+- Streaming integration plan
+- Implementation summary
+- Delivery documentation
 
-### Job Files (New)
-```
-jobs/01_data_quality_assessment.py  ← Analyze data quality
-jobs/02_deduplication.py            ← Remove duplicates
-jobs/03_fill_gaps.py                ← Fill gaps (auto-chunking) ⭐
-jobs/run_all_jobs.py                ← Run all jobs
-jobs/daily_job.py                   ← Daily automation
-```
+**Total:** ~2,400 lines of specs
 
-### Documentation (New)
-```
-docs/JOBS_QUICK_START.md            ← Start here!
-docs/SOLUTION_SUMMARY.md            ← Complete solution
-docs/DATA_QUALITY_REPORT.md         ← Analysis findings
-IMPLEMENTATION_COMPLETE.md          ← What was built
-```
+### `/scripts/`
+**Utility scripts**
+- Test scripts
+- Fix scripts
+- Analysis tools
 
-### Core Library
-```
-src/binance_tick_data/repository_v2.py   ← New repository
-src/binance_tick_data/db_config.py       ← Configuration
-src/binance_tick_data/errors.py          ← Error handling
-src/binance_tick_data/sources/rest_api.py ← Data ingestion
-```
+**Total:** 6 utility scripts
 
-### Configuration
-```
-config.yaml                         ← Pipeline settings
-pyproject.toml                      ← Dependencies
-```
-
----
-
-## Data Flow
-
-```
-1. Data Ingestion
-   ↓
-   src/binance_tick_data/sources/rest_api.py
-   (append mode)
-   ↓
-2. Database Storage
-   ↓
-   binance_pipeline.duckdb
-   (may have duplicates)
-   ↓
-3. Quality Assessment
-   ↓
-   jobs/01_data_quality_assessment.py
-   ↓
-4. Deduplication
-   ↓
-   jobs/02_deduplication.py
-   (creates backup)
-   ↓
-5. Gap Filling
-   ↓
-   jobs/03_fill_gaps.py
-   (auto-chunks)
-   ↓
-6. Clean Data
-   ↓
-   Ready for analysis!
-```
-
----
+### `/analysis_output/`
+**Generated analysis files**
+- Charts and visualizations
+- CSV exports
+- Analysis results
 
 ## File Counts
 
-| Category | Count | Lines |
-|----------|-------|-------|
-| Job Scripts | 5 | ~1,700 |
-| Documentation | 8 | ~5,000 words |
-| Library Code | 15+ | ~3,000 |
-| Examples | 4 | ~500 |
-| **Total New** | **13** | **~3,000 + docs** |
-
----
-
-## Quick Navigation
-
-### To fix data issues:
-→ `docs/JOBS_QUICK_START.md`
-
-### To understand the solution:
-→ `docs/SOLUTION_SUMMARY.md`
-
-### To read technical docs:
-→ `jobs/README.md`
-
-### To see implementation:
-→ `IMPLEMENTATION_COMPLETE.md`
-
-### To run jobs:
-```bash
-cd jobs/
-ls -1 *.py
+```
+Type                Count    Lines
+─────────────────────────────────────
+Python source       45       ~5,800
+Jupyter notebooks   2        ~300 cells
+Documentation       19       ~5,400
+Configuration       3        ~150
+Total              69       ~11,650
 ```
 
----
+## Database Files
 
-## Database Structure
+### `binance_pipeline.duckdb` (8.9 MB)
+Main production database with:
+- agg_trades table
+- trades table
+- order_book_snapshots table
+- Derived tables (dollar_bars, etc.)
 
-```
-binance_pipeline.duckdb
-├── binance_data (schema)
-│   ├── agg_trades               # Main data table
-│   ├── agg_trades_backup        # Backup (created by dedup job)
-│   ├── _dlt_loads               # DLT metadata
-│   ├── _dlt_pipeline_state      # DLT state
-│   └── _dlt_version             # DLT version
-└── (other schemas)
-```
-
----
-
-## Command Reference
-
-### Quality Management
-```bash
-# Assess quality
-uv run python jobs/01_data_quality_assessment.py
-
-# Remove duplicates
-uv run python jobs/02_deduplication.py --execute
-
-# Fill gaps
-uv run python jobs/03_fill_gaps.py --symbol BTCUSDT --fill-largest-gap
-
-# Run all
-uv run python jobs/run_all_jobs.py --symbol BTCUSDT --auto
-
-# Daily job
-uv run python jobs/daily_job.py --symbol BTCUSDT
-```
-
-### Data Analysis
-```bash
-# Simple read
-uv run python examples/simple_read.py
-
-# Data analysis with fractional differencing
-uv run python examples/data_analysis.py
-
-# Dollar bars
-uv run python examples/dollar_bars_example.py
-```
-
-### Manual Tools
-```bash
-# Gap analysis
-uv run python data_gap_analysis.py
-
-# Fix issues manually
-uv run python fix_data_issues.py
-```
-
----
+### `binance_gap_filler.duckdb` (172 MB)
+Gap filling database with historical data
 
 ## Configuration Files
 
-### Pipeline Configuration
-`config.yaml` - Database paths, table names, bar thresholds
+### `config.yaml`
+Main configuration for:
+- Database settings
+- Table mappings
+- Pipeline configuration
+- Streaming configuration
 
-### Dependencies
-`pyproject.toml` - Python dependencies managed by uv
+### `config.toml`
+DLT-specific configuration
 
-### Jobs Configuration
-Each job accepts command-line arguments:
-- `--db-path`: Database path
-- `--symbol`: Trading symbol
-- `--max-records`: Max records per chunk
-- etc.
+### `pyproject.toml`
+Python project metadata:
+- Dependencies
+- Scripts
+- Build system
 
----
+## Virtual Environment
 
-## Logs & Reports
+### `.venv/`
+Python 3.12 virtual environment with all dependencies installed
 
-### Quality Assessment
+## Quick Navigation
+
+### New User
+1. Start: `README.md`
+2. Core: `docs/QUICK_START.md`
+3. Streaming: `docs/GETTING_STARTED_STREAMING.md`
+4. Examples: `examples/`
+
+### Developer
+1. Architecture: `specs/STREAMING_INTEGRATION_PLAN.md`
+2. Source: `src/binance_tick_data/`
+3. Examples: `examples/custom_analyzer_example.py`
+
+### Operations
+1. Jobs: `jobs/README.md`
+2. Quality: `docs/JOBS_QUICK_START.md`
+3. Config: `config.yaml`
+
+## Size Summary
+
 ```
-jobs/reports/quality_assessment_YYYYMMDD_HHMMSS.json
-jobs/reports/quality_assessment_latest.json
+Component          Size
+─────────────────────────
+Source code        ~5,800 lines
+Documentation      ~5,400 lines
+Examples          ~940 lines
+Total code        ~12,140 lines
+
+Databases         ~181 MB
+Dependencies      ~500 MB (in .venv)
+Total disk        ~700 MB
 ```
 
-### Deduplication
+## Growth Over Time
+
 ```
-jobs/reports/deduplication_YYYYMMDD_HHMMSS.json
-jobs/reports/deduplication_latest.json
+Phase               Files    Lines Added
+──────────────────────────────────────
+Initial setup       15       ~2,000
+Core platform       20       ~3,000
+Streaming (P1-P3)   13       ~4,500
+Streaming (P4)      4        ~2,000
+Documentation       19       ~5,400
+──────────────────────────────────────
+Total              71       ~16,900
 ```
 
-### Gap Filling
-```
-jobs/reports/gap_filling_YYYYMMDD_HHMMSS.json
-jobs/reports/gap_filling_latest.json
-```
+## Maintenance
 
-### Daily Job
-```
-jobs/reports/daily/daily_job_YYYYMMDD.json
-```
+### Regular Updates
+- `uv.lock` - When dependencies change
+- `config.yaml` - For configuration changes
+- `docs/` - Keep documentation current
 
----
+### Generated Files
+- `analysis_output/` - Created by examples
+- `*.duckdb` - Database files
+- `.venv/` - Recreated with `uv sync`
 
-## Git Structure
+## Version Control
 
 ### Tracked
 - All source code
 - Documentation
-- Configuration files
-- Job scripts
+- Configuration
 - Examples
+- Job scripts
 
 ### Ignored (`.gitignore`)
-```
-jobs/reports/          # Generated reports
-*.pyc                  # Python cache
-__pycache__/          # Python cache
-.pytest_cache/        # Test cache
-*.log                 # Log files
-binance_pipeline.duckdb # Database
-```
-
----
-
-## Next Steps
-
-1. **Read:** `docs/JOBS_QUICK_START.md`
-2. **Run:** `uv run python jobs/run_all_jobs.py --symbol BTCUSDT --auto`
-3. **Automate:** Add daily job to cron
-4. **Monitor:** Check `jobs/reports/` directory
+- `.venv/`
+- `*.duckdb`
+- `__pycache__/`
+- Analysis outputs
+- Temporary files
 
 ---
 
 **Last Updated:** 2025-10-20
-**Status:** Complete and production-ready
+
+For detailed information about specific components, see the documentation in `/docs/`.

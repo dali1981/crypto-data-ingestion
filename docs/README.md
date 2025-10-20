@@ -1,18 +1,27 @@
 # Documentation Index
 
-This directory contains all documentation for the Binance tick data quality system.
+This directory contains all documentation for the Binance tick data platform, including both the core data ingestion system and the real-time streaming platform.
 
 ---
 
 ## 📖 Documentation Files
 
-### Quick Start
+### Getting Started Guides
 
-**[JOBS_QUICK_START.md](JOBS_QUICK_START.md)** ⭐ **Start here!**
-- 5-minute getting started guide
-- Quick commands to fix current issues
+**[QUICK_START.md](QUICK_START.md)** ⭐ **Core Platform**
+- Data ingestion quick start
+- Basic repository usage
+- Historical data download
+
+**[GETTING_STARTED_STREAMING.md](GETTING_STARTED_STREAMING.md)** 🚀 **Streaming Platform**
+- Real-time streaming guide
+- Market microstructure analysis
+- Custom analyzer development
+
+**[JOBS_QUICK_START.md](JOBS_QUICK_START.md)** 🔧 **Data Quality**
+- Data quality maintenance
+- Deduplication and gap filling
 - Daily automation setup
-- Troubleshooting common problems
 
 **[ADAPTIVE_CHUNKING.md](ADAPTIVE_CHUNKING.md)** 🧠 **How it works**
 - Adaptive learning explained
@@ -246,29 +255,52 @@ jobs/
 
 ---
 
+## 📚 Streaming Platform Documentation
+
+Complete documentation available in [../specs/](../specs/):
+
+- **STREAMING_INTEGRATION_PLAN.md** - Architecture and design
+- **STREAMING_IMPLEMENTATION_SUMMARY.md** - Implementation details
+- **PHASE_4_COMPLETE.md** - Complete feature list
+
+Quick reference: [../README_STREAMING.md](../README_STREAMING.md)
+
+---
+
+## 📂 Legacy Documentation
+
+Historical documentation moved to [legacy/](legacy/):
+- Initial project summaries
+- Migration guides
+- Installation documentation
+- Verification reports
+
+---
+
 ## 📝 Summary
 
 This documentation covers:
 
-✅ **Quick fixes** - Get your data clean in 5 minutes
-✅ **Complete solution** - Understand the architecture
-✅ **Technical details** - Deep dive into each job
-✅ **Original analysis** - What problems were found
-✅ **Best practices** - How to maintain data quality
+✅ **Data ingestion** - Historical and real-time data collection
+✅ **Streaming platform** - Market microstructure analysis
+✅ **Data quality** - Deduplication and gap filling
+✅ **Technical details** - Architecture and implementation
+✅ **Best practices** - Maintenance and operations
 
-**Start here:** [JOBS_QUICK_START.md](JOBS_QUICK_START.md)
-
-**Key insight:** The auto-chunking feature automatically handles large date ranges by breaking them into safe chunks that respect the max_records limit. No manual intervention needed!
+**New users start here:**
+1. Core platform: [QUICK_START.md](QUICK_START.md)
+2. Streaming: [GETTING_STARTED_STREAMING.md](GETTING_STARTED_STREAMING.md)
+3. Data quality: [JOBS_QUICK_START.md](JOBS_QUICK_START.md)
 
 ---
 
 ## 📅 Last Updated
 
 - **Date:** 2025-10-20
-- **Status:** Complete and tested
-- **Data Quality:** Issues identified, solutions provided
-- **Next Step:** Run `uv run python jobs/run_all_jobs.py --symbol BTCUSDT --auto`
+- **Status:** Complete - All phases delivered
+- **Features:** Data ingestion + Real-time streaming + Data quality
+- **Documentation:** Comprehensive guides and examples
 
 ---
 
-For questions or issues, refer to the specific documentation file most relevant to your need. Start with **JOBS_QUICK_START.md** for immediate action.
+For questions or issues, refer to the specific documentation file most relevant to your need.
