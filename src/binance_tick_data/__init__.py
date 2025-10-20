@@ -46,6 +46,13 @@ from .errors import (
     InvalidDateRangeError,
 )
 
+# Dollar volume sampling
+from .dollar_volume_sampling import (
+    DollarVolumeSampler,
+    create_dollar_volume_bars,
+    calculate_optimal_threshold,
+)
+
 __version__ = "0.1.0"
 
 __all__ = [
@@ -90,4 +97,9 @@ __all__ = [
     "RateLimitError",
     "QueryError",
     "InvalidDateRangeError",
+
+    # Dollar volume sampling
+    "DollarVolumeSampler",
+    "create_dollar_volume_bars",
+    "calculate_optimal_threshold",
 ]
