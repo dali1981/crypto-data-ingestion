@@ -6,7 +6,7 @@ database:
   db_path: "binance_pipeline.duckdb"
   catalog_name: ""  # Leave empty - catalog prefix not needed for DuckDB
   schema_name: "binance_data"
-  read_only: false
+  read_only: true  # Read-only by default - allows concurrent access while jobs write
 
 tables:
   # Core data tables

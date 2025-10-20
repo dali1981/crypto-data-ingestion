@@ -32,8 +32,8 @@ class DatabaseConfig(BaseModel):
         description="Database schema name"
     )
     read_only: bool = Field(
-        default=False,
-        description="Open database in read-only mode"
+        default=True,
+        description="Open database in read-only mode (default: True for safe concurrent access)"
     )
 
     @field_validator('db_path')

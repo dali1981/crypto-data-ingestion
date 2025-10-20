@@ -14,16 +14,18 @@ import pandas as pd
 class BinanceDataRepository:
     """Repository for accessing Binance tick data."""
 
-    def __init__(self, db_path: str = "binance_pipeline.duckdb", dataset_name: str = "binance_data"):
+    def __init__(self, db_path: str = "binance_pipeline.duckdb", dataset_name: str = "binance_data", read_only: bool = True):
         """
         Initialize the repository.
 
         Args:
             db_path: Path to DuckDB database file
             dataset_name: Dataset/schema name (default: binance_data)
+            read_only: Open database in read-only mode (default: True for safe concurrent access)
         """
         self.db_path = db_path
         self.dataset_name = dataset_name
+        self.read_only = read_only
         self._conn = None
 
     def __enter__(self):
@@ -38,7 +40,7 @@ class BinanceDataRepository:
     def connect(self):
         """Open database connection."""
         if self._conn is None:
-            self._conn = duckdb.connect(self.db_path, read_only=False)
+            self._conn = duckdb.connect(self.db_path, read_only=self.read_only)
         return self._conn
 
     def close(self):
