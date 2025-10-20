@@ -66,6 +66,38 @@ uv run python -c "from binance_tick_data import BinanceDataRepository; print('�
 
 See [INSTALLATION.md](INSTALLATION.md) for details.
 
+## ⚠️ Data Quality Management
+
+**Important:** This project includes a comprehensive data quality system to handle duplicates and gaps.
+
+### Quick Fix for Current Issues
+
+```bash
+# Automated fix (removes 10k duplicates, fills 17-day gap)
+uv run python jobs/run_all_jobs.py --symbol BTCUSDT --auto
+```
+
+### Daily Automation
+
+```bash
+# Add to cron (runs at 2 AM daily)
+0 2 * * * cd /path/to/project && uv run python jobs/daily_job.py --symbol BTCUSDT
+```
+
+**📚 Documentation:**
+- **[Quick Start Guide](docs/JOBS_QUICK_START.md)** - Fix data in 5 minutes
+- **[Complete Solution](docs/SOLUTION_SUMMARY.md)** - Architecture & design
+- **[Jobs README](jobs/README.md)** - Technical documentation
+- **[Data Quality Report](docs/DATA_QUALITY_REPORT.md)** - Analysis findings
+
+**Key Features:**
+- ✅ Automatic duplicate removal (with backup)
+- ✅ Smart gap filling with auto-chunking for large date ranges
+- ✅ Daily incremental updates
+- ✅ Comprehensive quality assessment
+
+---
+
 ## Quick Start
 
 ### 1. Historical Data Download
