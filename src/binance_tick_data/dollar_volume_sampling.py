@@ -202,6 +202,11 @@ class DollarVolumeSampler:
         bars.columns = ['timestamp', 'timestamp_close', 'open', 'high', 'low', 'close', 'price_std',
                        'volume', 'dollar_volume']
 
+        # Convert timestamps to datetime if they're integers (milliseconds from DuckDB)
+        if pd.api.types.is_integer_dtype(bars['timestamp']):
+            bars['timestamp'] = pd.to_datetime(bars['timestamp'], unit='ms')
+            bars['timestamp_close'] = pd.to_datetime(bars['timestamp_close'], unit='ms')
+
         # Add additional metrics
         tick_counts = df.groupby('bar_id').size()
         bars['tick_count'] = tick_counts
@@ -270,6 +275,11 @@ class DollarVolumeSampler:
                 bar_dollar_volume = cum_dollar_volume
                 timestamp_open = bar_data.iloc[0][timestamp_col]
                 timestamp_close = bar_data.iloc[-1][timestamp_col]
+
+                # Convert timestamps to datetime if they're integers (milliseconds from DuckDB)
+                if isinstance(timestamp_open, (int, np.integer)):
+                    timestamp_open = pd.to_datetime(timestamp_open, unit='ms')
+                    timestamp_close = pd.to_datetime(timestamp_close, unit='ms')
 
                 # Calculate duration
                 duration = (timestamp_close - timestamp_open).total_seconds() if hasattr(timestamp_close - timestamp_open, 'total_seconds') else 0
