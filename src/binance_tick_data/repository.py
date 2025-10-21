@@ -10,6 +10,8 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
+from .models import SymbolStats
+
 
 class BinanceDataRepository:
     """Repository for accessing Binance tick data."""
@@ -218,7 +220,7 @@ class BinanceDataRepository:
         symbol: str,
         start_time: Optional[Union[datetime, int]] = None,
         end_time: Optional[Union[datetime, int]] = None,
-    ) -> dict:
+    ) -> SymbolStats:
         """
         Get trading statistics for a symbol.
 
@@ -228,7 +230,7 @@ class BinanceDataRepository:
             end_time: End time (optional)
 
         Returns:
-            Dictionary with statistics
+            SymbolStats object with statistics and rich display methods
         """
         conditions = [f"symbol = '{symbol}'"]
 
@@ -259,19 +261,33 @@ class BinanceDataRepository:
 
         result = self.conn.execute(query).fetchone()
 
-        return {
-            "symbol": symbol,
-            "trade_count": result[0],
-            "min_price": float(result[1]) if result[1] else None,
-            "max_price": float(result[2]) if result[2] else None,
-            "avg_price": float(result[3]) if result[3] else None,
-            "total_volume": float(result[4]) if result[4] else None,
-            "sell_count": result[5],
-            "buy_count": result[6],
-            "buy_sell_ratio": result[6] / result[5] if result[5] > 0 else None,
-            "first_trade_time": datetime.fromtimestamp(result[7] / 1000) if result[7] else None,
-            "last_trade_time": datetime.fromtimestamp(result[8] / 1000) if result[8] else None,
-        }
+        # Extract values
+        trade_count = result[0]
+        min_price = float(result[1]) if result[1] is not None else None
+        max_price = float(result[2]) if result[2] is not None else None
+        avg_price = float(result[3]) if result[3] is not None else None
+        total_volume = float(result[4]) if result[4] is not None else None
+        sell_count = result[5] if result[5] is not None else 0
+        buy_count = result[6] if result[6] is not None else 0
+        first_trade_time = datetime.fromtimestamp(result[7] / 1000) if result[7] is not None else None
+        last_trade_time = datetime.fromtimestamp(result[8] / 1000) if result[8] is not None else None
+
+        # Calculate ratio
+        buy_sell_ratio = buy_count / sell_count if sell_count > 0 else None
+
+        return SymbolStats(
+            symbol=symbol,
+            trade_count=trade_count,
+            min_price=min_price,
+            max_price=max_price,
+            avg_price=avg_price,
+            total_volume=total_volume,
+            sell_count=sell_count,
+            buy_count=buy_count,
+            buy_sell_ratio=buy_sell_ratio,
+            first_trade_time=first_trade_time,
+            last_trade_time=last_trade_time,
+        )
 
     def get_volume_profile(
         self,

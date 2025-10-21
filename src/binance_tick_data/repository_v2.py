@@ -91,6 +91,24 @@ class BinanceDataRepository:
             self.connect()
         return self._conn
 
+    @property
+    def db_path(self) -> str:
+        """
+        Get database path.
+
+        Returns the database path from configuration.
+        """
+        return self.config.database.db_path
+
+    @property
+    def read_only(self) -> bool:
+        """
+        Get read-only mode status.
+
+        Returns whether the database is opened in read-only mode.
+        """
+        return self.config.database.read_only
+
     def _validate_schema_exists(self):
         """Validate that the required schema exists."""
         try:

@@ -50,6 +50,33 @@ class DatabaseConfig(BaseModel):
             return f"{self.catalog_name}.{self.schema_name}"
         return self.schema_name
 
+    @property
+    def schema(self) -> str:
+        """
+        Get schema name (backward compatibility property).
+
+        Returns the schema_name for convenient access.
+        """
+        return self.schema_name
+
+    @property
+    def catalog(self) -> str:
+        """
+        Get catalog name (backward compatibility property).
+
+        Returns the catalog_name for convenient access.
+        """
+        return self.catalog_name
+
+    @property
+    def path(self) -> Path:
+        """
+        Get database path as Path object.
+
+        Returns absolute path to database file.
+        """
+        return Path(self.db_path).absolute()
+
     def get_table_path(self, table_name: str) -> str:
         """Get the fully qualified table name."""
         return f"{self.full_schema_path}.{table_name}"
@@ -164,11 +191,51 @@ class AppConfig(BaseSettings):
         env_prefix="BINANCE_",
         env_nested_delimiter="__",
         case_sensitive=False,
+        extra="allow",  # Allow extra fields for forward compatibility
     )
 
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     tables: TableConfig = Field(default_factory=TableConfig)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+
+    @property
+    def db_path(self) -> str:
+        """
+        Convenience property for database path.
+
+        Returns the database path, making it easier to access from config.
+        """
+        return self.database.db_path
+
+    @property
+    def schema(self) -> str:
+        """
+        Convenience property for schema name.
+
+        Returns the schema name from database config.
+        """
+        return self.database.schema_name
+
+    @property
+    def catalog(self) -> str:
+        """
+        Convenience property for catalog name.
+
+        Returns the catalog name from database config.
+        """
+        return self.database.catalog_name
+
+    def get_table_path(self, table_name: str) -> str:
+        """
+        Convenience method to get fully qualified table path.
+
+        Args:
+            table_name: Name of the table
+
+        Returns:
+            Fully qualified table path (catalog.schema.table)
+        """
+        return self.database.get_table_path(table_name)
 
     @classmethod
     def from_yaml(cls, config_path: str | Path) -> "AppConfig":
