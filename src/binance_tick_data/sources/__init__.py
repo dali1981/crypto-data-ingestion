@@ -13,6 +13,10 @@ from .websocket import (
     realtime_depth,
 )
 
+# Backward compatibility aliases
+binance_rest_api = binance_historical_data
+binance_websocket = binance_realtime_data
+
 __all__ = [
     "binance_historical_data",
     "historical_trades",
@@ -22,4 +26,7 @@ __all__ = [
     "realtime_trades",
     "realtime_agg_trades",
     "realtime_depth",
+    # Backward compatibility aliases
+    "binance_rest_api",
+    "binance_websocket",
 ]

@@ -64,7 +64,7 @@ uv run python -c "from binance_tick_data import BinanceDataRepository; print('�
 - Can import `binance_tick_data` from anywhere
 - Perfect for development
 
-See [INSTALLATION.md](INSTALLATION.md) for details.
+See [QUICK_START.md](docs/QUICK_START.md) for details.
 
 ## ⚠️ Data Quality Management
 
@@ -105,14 +105,17 @@ uv run python jobs/run_all_jobs.py --symbol BTCUSDT --auto
 Download historical tick data for specified symbols:
 
 ```bash
-# Using uv (recommended for first time - limits to 10k records)
-uv run python pipelines/historical_pipeline.py \
+# Using console script (recommended for first time - limits to 10k records)
+binance-download \
     --symbols BTCUSDT \
     --start-date 2024-10-01 \
     --max-records 10000
 
 # Full download (can take a while!)
-uv run python pipelines/historical_pipeline.py --symbols BTCUSDT ETHUSDT --start-date 2024-10-01
+binance-download --symbols BTCUSDT ETHUSDT --start-date 2024-10-01
+
+# Alternative: using uv run
+uv run binance-download --symbols BTCUSDT --start-date 2024-10-01
 ```
 
 ### 2. Real-time Streaming
@@ -120,11 +123,14 @@ uv run python pipelines/historical_pipeline.py --symbols BTCUSDT ETHUSDT --start
 Stream live tick data:
 
 ```bash
-# Using uv
-uv run python pipelines/realtime_pipeline.py --symbols BTCUSDT ETHUSDT
+# Using console script
+binance-stream --symbols BTCUSDT ETHUSDT
 
 # Stream with limited batches (for testing)
-uv run python pipelines/realtime_pipeline.py --symbols BTCUSDT --max-batches 10
+binance-stream --symbols BTCUSDT --max-batches 10
+
+# Alternative: using uv run
+uv run binance-stream --symbols BTCUSDT ETHUSDT
 ```
 
 ### 3. Query Your Data
