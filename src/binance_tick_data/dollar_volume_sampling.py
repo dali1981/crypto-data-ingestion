@@ -434,27 +434,69 @@ def create_dollar_volume_bars(df: pd.DataFrame,
 
 
 def calculate_optimal_threshold(df: pd.DataFrame,
-                                target_bars: int,
+                                target_bars: int = None,
+                                target_bars_per_day: int = None,
                                 price_col: str = 'price',
-                                volume_col: str = 'volume') -> float:
+                                volume_col: str = 'volume',
+                                timestamp_col: str = 'timestamp') -> float:
     """
     Calculate optimal dollar volume threshold to achieve target number of bars.
 
     Args:
         df: DataFrame with tick data
-        target_bars: Desired number of bars
+        target_bars: Desired total number of bars (mutually exclusive with target_bars_per_day)
+        target_bars_per_day: Desired bars per day (requires timestamp column, mutually exclusive with target_bars)
         price_col: Name of price column
         volume_col: Name of volume column
+        timestamp_col: Name of timestamp column (required if using target_bars_per_day)
 
     Returns:
         Calculated threshold value
 
     Example:
+        >>> # Calculate for total number of bars
         >>> threshold = calculate_optimal_threshold(tick_data, target_bars=1000)
+        >>> bars = create_dollar_volume_bars(tick_data, threshold=threshold)
+
+        >>> # Calculate for bars per day
+        >>> threshold = calculate_optimal_threshold(tick_data, target_bars_per_day=50)
         >>> bars = create_dollar_volume_bars(tick_data, threshold=threshold)
     """
     if df.empty:
         raise InsufficientDataError("DataFrame is empty", required_records=1, available_records=0)
+
+    # Validate arguments
+    if target_bars is None and target_bars_per_day is None:
+        raise ValueError("Must specify either target_bars or target_bars_per_day")
+
+    if target_bars is not None and target_bars_per_day is not None:
+        raise ValueError("Cannot specify both target_bars and target_bars_per_day")
+
+    # Calculate target_bars from target_bars_per_day if needed
+    if target_bars_per_day is not None:
+        if timestamp_col not in df.columns:
+            raise ValueError(f"timestamp_col '{timestamp_col}' not found in DataFrame")
+
+        # Convert timestamps to datetime if needed
+        timestamps = df[timestamp_col]
+        if pd.api.types.is_integer_dtype(timestamps):
+            timestamps = pd.to_datetime(timestamps, unit='ms')
+        elif not pd.api.types.is_datetime64_any_dtype(timestamps):
+            timestamps = pd.to_datetime(timestamps)
+
+        # Calculate days in data
+        time_range = timestamps.max() - timestamps.min()
+        days = time_range.total_seconds() / 86400
+
+        if days < 0.01:  # Less than ~15 minutes
+            raise InsufficientDataError(
+                "Data span is too short for target_bars_per_day calculation",
+                required_records=int(target_bars_per_day * days) if days > 0 else 1,
+                available_records=len(df)
+            )
+
+        target_bars = int(target_bars_per_day * days)
+        logger.info(f"Calculated target_bars={target_bars} from {target_bars_per_day} bars/day over {days:.2f} days")
 
     total_dollar_volume = (df[price_col] * df[volume_col]).sum()
     threshold = total_dollar_volume / target_bars
