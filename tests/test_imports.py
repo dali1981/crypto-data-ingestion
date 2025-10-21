@@ -47,9 +47,9 @@ def test_library_main_import():
 
 def test_library_sources_import():
     """Test that library sources can be imported."""
-    from binance_tick_data.sources import binance_rest_api, binance_websocket
-    assert binance_rest_api is not None
-    assert binance_websocket is not None
+    from binance_tick_data.sources import binance_historical_data, binance_realtime_data
+    assert binance_historical_data is not None
+    assert binance_realtime_data is not None
 
 
 def test_library_consumers_import():
