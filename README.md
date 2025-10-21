@@ -1,6 +1,24 @@
 # Binance Tick Data Ingestion Library
 
-A comprehensive Python library for downloading and streaming Binance tick data using [dlt (data load tool)](https://dlthub.com/). Supports both historical data backfill and real-time WebSocket streaming, with local storage in DuckDB/Parquet format.
+A comprehensive Python library for downloading and streaming Binance tick data using [dlt (data load tool)](https://dlthub.com/). Supports both historical data acquisition and real-time WebSocket streaming, with local storage in DuckDB/Parquet format.
+
+## 🆕 Dagster Pipeline for Automated Data Acquisition
+
+**NEW**: Full Dagster orchestration pipeline for automatic data maintenance!
+
+- ✅ **Automatic fetching** for 20 trading pairs
+- ✅ **Self-healing** (auto-deduplication, gap filling)
+- ✅ **Scheduled updates** (daily, every 6h, weekly)
+- ✅ **Event-driven triggers** (sensors for freshness, duplicates, gaps)
+- ✅ **Visual monitoring** via Dagster UI
+
+**Quick Start:**
+```bash
+# Launch Dagster UI
+./start_dagster.sh
+```
+
+See [DAGSTER_SETUP_SUMMARY.md](DAGSTER_SETUP_SUMMARY.md) for complete details.
 
 ## Features
 
