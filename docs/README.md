@@ -13,6 +13,12 @@ This directory contains all documentation for the Binance tick data platform, in
 - Basic repository usage
 - Historical data download
 
+**[API_REFERENCE.md](API_REFERENCE.md)** 📚 **Client API Documentation**
+- Complete API reference for `BinanceDataRepository`
+- All methods with examples
+- Parameter descriptions and return types
+- Best practices and error handling
+
 **[GETTING_STARTED_STREAMING.md](GETTING_STARTED_STREAMING.md)** 🚀 **Streaming Platform**
 - Real-time streaming guide
 - Market microstructure analysis
@@ -102,6 +108,9 @@ crontab -e
 
 ### "I just want to fix the data"
 → Read **[JOBS_QUICK_START.md](JOBS_QUICK_START.md)**
+
+### "I want to use the data in my code"
+→ Read **[API_REFERENCE.md](API_REFERENCE.md)**
 
 ### "I want to understand the solution"
 → Read **[SOLUTION_SUMMARY.md](SOLUTION_SUMMARY.md)**
