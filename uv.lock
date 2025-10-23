@@ -350,6 +350,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "dagster" },
+    { name = "dagster-dlt" },
     { name = "dagster-webserver" },
     { name = "dlt" },
     { name = "duckdb" },
@@ -391,6 +392,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "dagster", specifier = ">=1.11.15" },
+    { name = "dagster-dlt", specifier = ">=0.27.15" },
     { name = "dagster-webserver", specifier = ">=1.11.15" },
     { name = "dlt", specifier = ">=1.17.1" },
     { name = "duckdb", specifier = ">=1.4.1" },
@@ -875,6 +877,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a5/1d/3462d6b38a54b1a1bcca485a24ef82d204aedfe989cca46e223c6375d46d/dagster-1.11.15.tar.gz", hash = "sha256:7807b0337736b38d14124e4342931c31b55e49ff0d9137afa31391015e888675", size = 1554745, upload-time = "2025-10-16T20:34:14.258Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e0/16/788095ab88ef21fce2f1cfae3d0b2d6993dec02fc8a32cb39c7eee917ded/dagster-1.11.15-py3-none-any.whl", hash = "sha256:afd9dee688c93405339265b22ee27b9dbd6d24e7a1bdebcda38ae663b02f986e", size = 1937948, upload-time = "2025-10-16T20:34:11.627Z" },
+]
+
+[[package]]
+name = "dagster-dlt"
+version = "0.27.15"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dagster" },
+    { name = "dlt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/ab/eeb3e16fc8a2e586b1cf4a1b4bd842f5cde18085f6d72d46974f5b2fbe66/dagster_dlt-0.27.15.tar.gz", hash = "sha256:346839e6c78fa636808baf07e1ea85e11e8b8df0282a12d243f2154b7663fde3", size = 17531, upload-time = "2025-10-16T20:38:19.398Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/27/47ca875fbd1052c2d4bbe596089a4fbb93ffa2f3705eb4d392a570fcb61c/dagster_dlt-0.27.15-py3-none-any.whl", hash = "sha256:7b0e8d2da6cbd640140f694715096df752d738689f3b03b13497235b2065a5e6", size = 20078, upload-time = "2025-10-16T20:38:18.569Z" },
 ]
 
 [[package]]

@@ -2,13 +2,15 @@
 
 from dagster import define_asset_job, AssetSelection
 
+# Note: Jobs are defined using AssetSelection which doesn't need imports
+
 # ============================================================================
 # JOB 1: Fetch Latest Data
 # ============================================================================
 
 fetch_latest_job = define_asset_job(
     name="fetch_latest",
-    selection=AssetSelection.keys("raw_agg_trades", "raw_order_books"),
+    selection=AssetSelection.groups("raw_data"),  # Select all assets in raw_data group
     description="Fetch latest data from Binance API for all symbols (append mode)"
 )
 
@@ -18,7 +20,7 @@ fetch_latest_job = define_asset_job(
 
 detect_issues_job = define_asset_job(
     name="detect_issues",
-    selection=AssetSelection.keys("duplicate_detection", "gap_detection"),
+    selection=AssetSelection.groups("data_quality"),  # Select all assets in data_quality group
     description="Scan database for duplicates and gaps"
 )
 
@@ -28,7 +30,7 @@ detect_issues_job = define_asset_job(
 
 cleanup_duplicates_job = define_asset_job(
     name="cleanup_duplicates",
-    selection=AssetSelection.keys("deduplicate_trades"),
+    selection=AssetSelection.groups("data_cleaning"),  # All cleaning assets
     description="Remove duplicate records from database"
 )
 
@@ -38,7 +40,7 @@ cleanup_duplicates_job = define_asset_job(
 
 fill_gaps_job = define_asset_job(
     name="fill_gaps",
-    selection=AssetSelection.keys("fill_largest_gap"),
+    selection=AssetSelection.groups("data_cleaning"),  # All cleaning assets
     description="Fill largest gap in data using adaptive chunking"
 )
 
@@ -48,7 +50,7 @@ fill_gaps_job = define_asset_job(
 
 daily_update_job = define_asset_job(
     name="daily_update",
-    selection=AssetSelection.keys("fill_recent_data"),
+    selection=AssetSelection.groups("data_cleaning"),  # All cleaning assets
     description="Daily job: fetch last 24 hours of data for all symbols"
 )
 

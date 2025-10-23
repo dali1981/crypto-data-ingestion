@@ -3,7 +3,7 @@
 from dagster import ConfigurableResource
 import duckdb
 from pathlib import Path
-from ..config import DB_PATH, DATASET_NAME
+from dagster_pipeline.config import DB_PATH, DATASET_NAME
 
 
 class DuckDBResource(ConfigurableResource):

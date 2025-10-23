@@ -5,6 +5,7 @@ description = "Binance tick data ingestion library using dlt"
 requires-python = ">=3.10"
 dependencies = [
     "dagster>=1.11.15",
+    "dagster-dlt>=0.27.15",
     "dagster-webserver>=1.11.15",
     "dlt>=1.17.1",
     "duckdb>=1.4.1",

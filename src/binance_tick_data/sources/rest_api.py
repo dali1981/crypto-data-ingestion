@@ -1,12 +1,15 @@
 """Binance REST API source for historical data."""
 
 import dlt
+import logging
 from typing import Iterator, Optional, List
 from datetime import datetime, timedelta
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 import time
 from ..config import BinanceConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dlt.source
@@ -18,140 +21,90 @@ def binance_historical_data(
     """
     DLT source for historical Binance data.
 
+    Creates one resource per symbol for independent extract/normalize/load cycles.
+    This allows data to be written as each symbol completes, rather than waiting
+    for all symbols to finish.
+
     Args:
         config: BinanceConfig instance
         symbols: List of symbols to fetch (defaults to config.symbols)
         start_date: Start date in YYYY-MM-DD format (defaults to config.historical_start_date)
 
     Returns:
-        DLT source with multiple resources
+        DLT source with multiple resources (one per symbol)
     """
     symbols = symbols or config.symbols
     start_date = start_date or config.historical_start_date
 
-    return (
-        historical_trades(config, symbols, start_date),
-        aggregated_trades(config, symbols, start_date),
-        order_book_snapshots(config, symbols),
+    # Create one resource per symbol so each can extract/normalize/load independently
+    resources = []
+    for symbol in symbols:
+        resources.append(create_agg_trades_resource(config, symbol, start_date))
+
+    return resources
+
+
+# Dead code removed: historical_trades(), aggregated_trades()
+# These multi-symbol functions have been replaced with per-symbol resources
+# for independent extract/normalize/load cycles
+
+
+def create_agg_trades_resource(
+    config: BinanceConfig,
+    symbol: str,
+    start_date: str,
+) -> dlt.resource:
+    """
+    Create a DLT resource for a single symbol's aggregated trades.
+
+    DLT Process (3 stages):
+    1. Extract: Generator yields data → buffered in memory → written to temp JSONL
+    2. Normalize: JSONL processed → schema inference → load packages created
+    3. Load: Load packages written to destination (Parquet files)
+
+    Per-symbol resources ensure each symbol completes all 3 stages independently,
+    so data is written to Parquet as each symbol finishes instead of waiting
+    for all 20 symbols to complete extraction.
+
+    Args:
+        config: BinanceConfig instance with incremental_batch_size limit
+        symbol: Trading symbol (e.g., "BTCUSDT")
+        start_date: Start date in YYYY-MM-DD format (only used on first run)
+
+    Returns:
+        DLT resource configured for this symbol
+    """
+    @dlt.resource(
+        name=f"agg_trades_{symbol.lower()}",
+        write_disposition="append",
+        primary_key="agg_trade_id",
     )
+    def _fetch_agg_trades(
+        incremental: dlt.sources.incremental[int] = dlt.sources.incremental("timestamp", initial_value=None),
+    ) -> Iterator[dict]:
+        """Fetch aggregated trades for a single symbol with incremental loading."""
+        # Increase timeout to 60 seconds for large data fetches
+        client = Client(
+            config.api_key,
+            config.api_secret,
+            requests_params={'timeout': 60}
+        )
 
+        # Use incremental cursor's last value if available, otherwise use start_date
+        last_timestamp = incremental.last_value
+        is_incremental_run = last_timestamp is not None
 
-@dlt.resource(
-    name="trades",
-    write_disposition="append",
-    primary_key="id",
-)
-def historical_trades(
-    config: BinanceConfig,
-    symbols: List[str],
-    start_date: str,
-) -> Iterator[dict]:
-    """
-    Fetch historical trade data for specified symbols.
-
-    Args:
-        config: BinanceConfig instance
-        symbols: List of trading symbols
-        start_date: Start date in YYYY-MM-DD format
-
-    Yields:
-        Trade records with symbol, price, quantity, timestamp, etc.
-    """
-    client = Client(config.api_key, config.api_secret)
-    start_ts = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000)
-
-    for symbol in symbols:
-        print(f"Fetching historical trades for {symbol}...")
-
-        try:
-            # Get trades starting from start_date
-            from_id = None
-            batch_count = 0
-
-            while True:
-                # Binance allows fetching 1000 trades per request
-                if from_id:
-                    trades = client.get_historical_trades(
-                        symbol=symbol,
-                        limit=1000,
-                        fromId=from_id
-                    )
-                else:
-                    # Get recent trades to start
-                    trades = client.get_recent_trades(symbol=symbol, limit=1000)
-
-                if not trades:
-                    break
-
-                # Filter trades by start_date
-                filtered_trades = [
-                    {
-                        "id": int(trade["id"]),
-                        "price": trade["price"],
-                        "qty": trade["qty"],
-                        "quoteQty": trade["quoteQty"],
-                        "time": int(trade["time"]),
-                        "isBuyerMaker": trade["isBuyerMaker"],
-                        "isBestMatch": trade["isBestMatch"],
-                        "symbol": symbol,
-                    }
-                    for trade in trades
-                    if int(trade["time"]) >= start_ts
-                ]
-
-                if filtered_trades:
-                    yield from filtered_trades
-                    batch_count += len(filtered_trades)
-                    print(f"  Fetched {batch_count} trades for {symbol}...")
-
-                # Get next batch
-                from_id = trades[-1]["id"] + 1
-
-                # Rate limiting: respect Binance API limits
-                time.sleep(0.1)  # 10 requests per second max
-
-                # Stop if we've reached current time
-                if trades[-1]["time"] >= int(time.time() * 1000):
-                    break
-
-        except BinanceAPIException as e:
-            print(f"Error fetching trades for {symbol}: {e}")
-            continue
-
-
-@dlt.resource(
-    name="agg_trades",
-    write_disposition="append",
-    primary_key="agg_trade_id",
-)
-def aggregated_trades(
-    config: BinanceConfig,
-    symbols: List[str],
-    start_date: str,
-) -> Iterator[dict]:
-    """
-    Fetch aggregated trade data for specified symbols.
-
-    Aggregated trades are more efficient than individual trades
-    and suitable for most analysis purposes.
-
-    Args:
-        config: BinanceConfig instance
-        symbols: List of trading symbols
-        start_date: Start date in YYYY-MM-DD format
-
-    Yields:
-        Aggregated trade records
-    """
-    client = Client(config.api_key, config.api_secret)
-    start_ts = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000)
-
-    for symbol in symbols:
-        print(f"Fetching aggregated trades for {symbol}...")
+        if is_incremental_run:
+            start_ts = last_timestamp + 1
+            logger.info(f"[{symbol}] Incremental loading from {datetime.fromtimestamp(start_ts / 1000)}")
+        else:
+            start_ts = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000)
+            logger.info(f"[{symbol}] Initial backfill from {start_date}")
 
         try:
             from_id = None
             batch_count = 0
+            current_day = None  # Track current day for logging
 
             while True:
                 if from_id:
@@ -186,14 +139,25 @@ def aggregated_trades(
                     for trade in trades
                 ]
 
-                # Yield in smaller chunks to enable incremental loading
-                yield transformed_trades  # Yield as list, not individual items
-                batch_count += len(transformed_trades)
-                print(f"  Fetched {batch_count} aggregated trades for {symbol}...")
+                # Log when starting a new day of data
+                first_trade_day = datetime.fromtimestamp(trades[0]["T"] / 1000).date()
+                if current_day != first_trade_day:
+                    current_day = first_trade_day
+                    logger.info(f"[{symbol}] Downloading {current_day}")
 
-                # Check if we've hit the max records limit
+                # Yield in smaller chunks to enable incremental loading
+                yield transformed_trades
+                batch_count += len(transformed_trades)
+
+                # Check if we've hit the max records limit (for testing)
                 if config.historical_max_records and batch_count >= config.historical_max_records:
-                    print(f"  Reached max records limit ({config.historical_max_records})")
+                    logger.info(f"[{symbol}] Reached max records limit ({config.historical_max_records:,})")
+                    break
+
+                # For incremental runs (NOT initial backfill), limit batch size
+                # Keeps incremental jobs fast (~5 seconds per symbol)
+                if is_incremental_run and batch_count >= config.incremental_batch_size:
+                    logger.info(f"[{symbol}] Incremental batch complete ({batch_count:,} trades)")
                     break
 
                 # Get next batch
@@ -204,52 +168,15 @@ def aggregated_trades(
 
                 # Stop if we've reached current time
                 if trades[-1]["T"] >= int(time.time() * 1000):
+                    logger.info(f"[{symbol}] Reached current time ({batch_count:,} total trades)")
                     break
 
         except BinanceAPIException as e:
-            print(f"Error fetching aggregated trades for {symbol}: {e}")
-            continue
+            logger.error(f"[{symbol}] Error: {e}")
+            return
+
+    return _fetch_agg_trades
 
 
-@dlt.resource(
-    name="order_book_snapshots",
-    write_disposition="append",
-)
-def order_book_snapshots(
-    config: BinanceConfig,
-    symbols: List[str],
-    depth: int = 20,
-) -> Iterator[dict]:
-    """
-    Fetch current order book snapshots for specified symbols.
-
-    Args:
-        config: BinanceConfig instance
-        symbols: List of trading symbols
-        depth: Order book depth (5, 10, 20, 50, 100, 500, 1000, 5000)
-
-    Yields:
-        Order book snapshot records
-    """
-    client = Client(config.api_key, config.api_secret)
-
-    for symbol in symbols:
-        print(f"Fetching order book snapshot for {symbol}...")
-
-        try:
-            depth_data = client.get_order_book(symbol=symbol, limit=depth)
-
-            yield {
-                "symbol": symbol,
-                "timestamp": int(time.time() * 1000),
-                "last_update_id": depth_data["lastUpdateId"],
-                "bids": depth_data["bids"],
-                "asks": depth_data["asks"],
-            }
-
-        except BinanceAPIException as e:
-            print(f"Error fetching order book for {symbol}: {e}")
-            continue
-
-        # Rate limiting
-        time.sleep(0.1)
+# Dead code removed: order_book_snapshots()
+# This is now handled by the Dagster asset raw_order_books in dagster_pipeline/assets/raw_data.py

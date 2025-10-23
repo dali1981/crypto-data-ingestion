@@ -26,8 +26,11 @@ class BinanceConfig:
 
     # Historical data settings
     historical_start_date: str = "2024-01-01"  # Format: YYYY-MM-DD
-    historical_batch_size: int = 1000  # Number of records per API call
-    historical_max_records: int = None  # Maximum records to fetch (None = unlimited)
+    historical_batch_size: int = 1000  # Number of records per API call (Binance limit)
+    historical_max_records: int = None  # Max total records for testing (None = unlimited)
+
+    # Incremental loading settings
+    incremental_batch_size: int = 50000  # Max records per incremental run (prevents long-running jobs)
 
     # Real-time streaming settings
     stream_buffer_size: int = 100  # Buffer size before flushing to storage

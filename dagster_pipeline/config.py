@@ -104,8 +104,7 @@ GAP_THRESHOLD_HOURS = 6.0  # Trigger fill if gap > 6 hours
 FRESHNESS_THRESHOLD_HOURS = 2.0  # Trigger fetch if data > 2 hours old
 
 # Historical data settings
-HISTORICAL_START_DATE = "2024-10-01"
-MAX_RECORDS_PER_CHUNK = 50000
+HISTORICAL_START_DATE = "2025-10-22"
 
 # Database configuration
 DB_PATH = "binance_pipeline.duckdb"

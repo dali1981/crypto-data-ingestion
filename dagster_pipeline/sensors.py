@@ -8,8 +8,8 @@ from dagster import (
     SkipReason
 )
 from datetime import datetime
-from .jobs import cleanup_duplicates_job, fill_gaps_job, fetch_latest_job
-from .config import (
+from dagster_pipeline.jobs import cleanup_duplicates_job, fill_gaps_job, fetch_latest_job
+from dagster_pipeline.config import (
     DUPLICATE_THRESHOLD,
     GAP_THRESHOLD_HOURS,
     FRESHNESS_THRESHOLD_HOURS
@@ -19,28 +19,26 @@ from .config import (
 @sensor(
     job=cleanup_duplicates_job,
     default_status=DefaultSensorStatus.RUNNING,
-    minimum_interval_seconds=3600  # Check every hour
+    minimum_interval_seconds=3600,  # Check every hour
+    required_resource_keys={"duckdb_query"}
 )
 def duplicate_cleanup_sensor(
-    context: SensorEvaluationContext,
-    duckdb_conn
+    context: SensorEvaluationContext
 ):
     """
     Trigger deduplication when duplicates exceed threshold.
 
     Checks every hour, triggers cleanup if duplicates > DUPLICATE_THRESHOLD.
     """
-    conn = duckdb_conn.get_connection()
+    duckdb_query = context.resources.duckdb_query
 
     try:
-        result = conn.execute("""
+        result_df = duckdb_query.query("""
             SELECT COUNT(*) - COUNT(DISTINCT agg_trade_id) as duplicate_count
             FROM binance_data.agg_trades
-        """).fetchone()
+        """)
 
-        duplicate_count = result[0] if result else 0
-
-        conn.close()
+        duplicate_count = int(result_df.iloc[0, 0]) if not result_df.empty else 0
 
         if duplicate_count > DUPLICATE_THRESHOLD:
             context.log.info(
@@ -64,23 +62,23 @@ def duplicate_cleanup_sensor(
 @sensor(
     job=fill_gaps_job,
     default_status=DefaultSensorStatus.RUNNING,
-    minimum_interval_seconds=86400  # Check daily
+    minimum_interval_seconds=86400,  # Check daily
+    required_resource_keys={"duckdb_query"}
 )
 def gap_fill_sensor(
-    context: SensorEvaluationContext,
-    duckdb_conn
+    context: SensorEvaluationContext
 ):
     """
     Trigger gap filling when large gaps detected.
 
     Checks daily, triggers if gap > GAP_THRESHOLD_HOURS exists.
     """
-    conn = duckdb_conn.get_connection()
+    duckdb_query = context.resources.duckdb_query
 
     try:
         min_gap_ms = GAP_THRESHOLD_HOURS * 3600000  # Convert to milliseconds
 
-        result = conn.execute(f"""
+        result_df = duckdb_query.query(f"""
             WITH time_diffs AS (
                 SELECT
                     symbol,
@@ -92,13 +90,11 @@ def gap_fill_sensor(
             GROUP BY symbol
             ORDER BY largest_gap_ms DESC
             LIMIT 1
-        """).fetchone()
+        """)
 
-        conn.close()
-
-        if result and result[1]:
-            symbol = result[0]
-            largest_gap_ms = result[1]
+        if not result_df.empty and result_df.iloc[0, 1]:
+            symbol = result_df.iloc[0, 0]
+            largest_gap_ms = result_df.iloc[0, 1]
             largest_gap_hours = largest_gap_ms / 3600000
 
             if largest_gap_ms > min_gap_ms:
@@ -125,34 +121,32 @@ def gap_fill_sensor(
 @sensor(
     job=fetch_latest_job,
     default_status=DefaultSensorStatus.RUNNING,
-    minimum_interval_seconds=3600  # Check hourly
+    minimum_interval_seconds=3600,  # Check hourly
+    required_resource_keys={"duckdb_query"}
 )
 def data_freshness_sensor(
-    context: SensorEvaluationContext,
-    duckdb_conn
+    context: SensorEvaluationContext
 ):
     """
     Trigger data fetch when data becomes stale.
 
     Checks hourly, triggers if data > FRESHNESS_THRESHOLD_HOURS old.
     """
-    conn = duckdb_conn.get_connection()
+    duckdb_query = context.resources.duckdb_query
 
     try:
-        result = conn.execute("""
+        result_df = duckdb_query.query("""
             SELECT MAX(timestamp) as last_ts
             FROM binance_data.agg_trades
-        """).fetchone()
+        """)
 
-        conn.close()
-
-        if not result or not result[0]:
+        if result_df.empty or not result_df.iloc[0, 0]:
             # No data - trigger initial fetch
             context.log.info("No data found - triggering initial fetch")
             yield RunRequest(run_key="initial_fetch")
             return
 
-        last_timestamp = datetime.fromtimestamp(result[0] / 1000)
+        last_timestamp = datetime.fromtimestamp(result_df.iloc[0, 0] / 1000)
         hours_old = (datetime.now() - last_timestamp).total_seconds() / 3600
 
         if hours_old > FRESHNESS_THRESHOLD_HOURS:

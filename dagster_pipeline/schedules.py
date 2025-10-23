@@ -1,7 +1,7 @@
 """Schedule definitions for Dagster pipeline."""
 
 from dagster import ScheduleDefinition
-from .jobs import (
+from dagster_pipeline.jobs import (
     full_maintenance_job,
     daily_update_job,
     fill_gaps_job,

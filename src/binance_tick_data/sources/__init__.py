@@ -2,9 +2,7 @@
 
 from .rest_api import (
     binance_historical_data,
-    historical_trades,
-    aggregated_trades,
-    order_book_snapshots,
+    create_agg_trades_resource,
 )
 from .websocket import (
     binance_realtime_data,
@@ -15,9 +13,7 @@ from .websocket import (
 
 __all__ = [
     "binance_historical_data",
-    "historical_trades",
-    "aggregated_trades",
-    "order_book_snapshots",
+    "create_agg_trades_resource",
     "binance_realtime_data",
     "realtime_trades",
     "realtime_agg_trades",

@@ -3,19 +3,18 @@
 from dagster import asset, Output, AssetExecutionContext, AssetIn
 from datetime import datetime
 from typing import Dict, List
-from ..config import SYMBOLS
+import pandas as pd
+from dagster_pipeline.config import SYMBOLS
 
 
 @asset(
-    ins={"raw_data": AssetIn("raw_agg_trades")},
     group_name="data_quality",
     compute_kind="duckdb",
-    description="Detect duplicate records in aggregated trades"
+    description="Detect duplicate records in aggregated trades",
+    required_resource_keys={"duckdb_query"}
 )
 def duplicate_detection(
-    context: AssetExecutionContext,
-    duckdb_conn,
-    raw_data: dict
+    context: AssetExecutionContext
 ) -> Output[Dict]:
     """
     Count duplicate records by agg_trade_id across all symbols.
@@ -23,18 +22,18 @@ def duplicate_detection(
     Returns:
         Dict with duplicate counts and breakdown by symbol
     """
-    conn = duckdb_conn.get_connection()
+    duckdb_query = context.resources.duckdb_query
 
     # Overall duplicate count
-    result = conn.execute("""
+    result_df = duckdb_query.query("""
         SELECT COUNT(*) - COUNT(DISTINCT agg_trade_id) as duplicate_count
         FROM binance_data.agg_trades
-    """).fetchone()
+    """)
 
-    duplicate_count = result[0] if result else 0
+    duplicate_count = int(result_df.iloc[0, 0]) if not result_df.empty else 0
 
     # Breakdown by symbol
-    breakdown_results = conn.execute("""
+    breakdown_df = duckdb_query.query("""
         WITH dup_records AS (
             SELECT symbol, agg_trade_id, COUNT(*) as count
             FROM binance_data.agg_trades
@@ -45,9 +44,9 @@ def duplicate_detection(
         FROM dup_records
         GROUP BY symbol
         ORDER BY dup_count DESC
-    """).fetchall()
+    """)
 
-    breakdown = {symbol: count for symbol, count in breakdown_results}
+    breakdown = dict(zip(breakdown_df['symbol'], breakdown_df['dup_count'])) if not breakdown_df.empty else {}
 
     context.log.info(f"\n{'='*80}")
     context.log.info(f"DUPLICATE DETECTION")
@@ -60,8 +59,6 @@ def duplicate_detection(
             context.log.warning(f"  {symbol}: {count:,}")
     else:
         context.log.info("✅ No duplicates found!")
-
-    conn.close()
 
     return Output(
         value={
@@ -80,15 +77,13 @@ def duplicate_detection(
 
 
 @asset(
-    ins={"raw_data": AssetIn("raw_agg_trades")},
     group_name="data_quality",
     compute_kind="duckdb",
-    description="Detect time gaps (>1 hour) in trade data"
+    description="Detect time gaps (>1 hour) in trade data",
+    required_resource_keys={"duckdb_query"}
 )
 def gap_detection(
-    context: AssetExecutionContext,
-    duckdb_conn,
-    raw_data: dict
+    context: AssetExecutionContext
 ) -> Output[List[Dict]]:
     """
     Find time gaps > 1 hour in the data for each symbol.
@@ -96,12 +91,12 @@ def gap_detection(
     Returns:
         List of gaps with start/end timestamps and duration
     """
-    conn = duckdb_conn.get_connection()
+    duckdb_query = context.resources.duckdb_query
 
     # Find gaps > 1 hour
     min_gap_ms = 3600000  # 1 hour in milliseconds
 
-    gaps_results = conn.execute(f"""
+    gaps_df = duckdb_query.query(f"""
         WITH time_diffs AS (
             SELECT
                 symbol,
@@ -114,19 +109,20 @@ def gap_detection(
         FROM time_diffs
         WHERE gap_ms > {min_gap_ms}
         ORDER BY gap_ms DESC
-    """).fetchall()
+    """)
 
     gap_list = []
-    for symbol, prev_ts, curr_ts, gap_ms in gaps_results:
-        gap_list.append({
-            'symbol': symbol,
-            'start': datetime.fromtimestamp(prev_ts / 1000),
-            'end': datetime.fromtimestamp(curr_ts / 1000),
-            'start_ts': prev_ts,
-            'end_ts': curr_ts,
-            'hours': gap_ms / 3600000,
-            'days': gap_ms / 86400000
-        })
+    if not gaps_df.empty:
+        for _, row in gaps_df.iterrows():
+            gap_list.append({
+                'symbol': row['symbol'],
+                'start': datetime.fromtimestamp(row['prev_timestamp'] / 1000),
+                'end': datetime.fromtimestamp(row['timestamp'] / 1000),
+                'start_ts': row['prev_timestamp'],
+                'end_ts': row['timestamp'],
+                'hours': row['gap_ms'] / 3600000,
+                'days': row['gap_ms'] / 86400000
+            })
 
     context.log.info(f"\n{'='*80}")
     context.log.info(f"GAP DETECTION")
@@ -155,8 +151,6 @@ def gap_detection(
             )
     else:
         context.log.info("✅ No gaps found!")
-
-    conn.close()
 
     return Output(
         value=gap_list,

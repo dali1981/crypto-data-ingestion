@@ -15,4 +15,5 @@ echo ""
 echo "======================================================================"
 
 # Launch Dagster dev server
-uv run dagster dev -f dagster_pipeline/__init__.py
+# Use -m (module) instead of -f (file) to properly load the Dagster definitions
+uv run dagster dev -m dagster_pipeline

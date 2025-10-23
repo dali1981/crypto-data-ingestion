@@ -8,113 +8,57 @@ from pathlib import Path
 
 # Add project root to path to import jobs module
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 
 @asset(
     ins={"duplicates": AssetIn("duplicate_detection")},
     group_name="data_cleaning",
     compute_kind="duckdb",
-    description="Remove duplicate records (keeps first occurrence)"
+    description="Remove duplicate records (keeps first occurrence)",
+    required_resource_keys={"duckdb_query"}
 )
 def deduplicate_trades(
     context: AssetExecutionContext,
-    duckdb_conn,
     duplicates: Dict
 ) -> Output[int]:
     """
-    Remove duplicates from agg_trades table.
+    Remove duplicates from agg_trades Parquet files.
 
-    Only runs if duplicates detected.
-    Creates backup before deletion.
+    NOTE: With Parquet-first architecture, this asset needs refactoring.
+    Currently uses DuckDB views for deduplication detection only.
+    Full deduplication should rebuild Parquet files with unique records.
 
     Returns:
-        Number of duplicates removed
+        Number of duplicates detected
     """
     if not duplicates["has_duplicates"]:
         context.log.info("No duplicates found - skipping deduplication")
         return Output(
             value=0,
             metadata={
-                "duplicates_removed": 0,
+                "duplicates_detected": 0,
                 "skipped": True
             }
         )
 
     duplicate_count = duplicates["duplicate_count"]
     context.log.info(f"\n{'='*80}")
-    context.log.info(f"DEDUPLICATION")
+    context.log.info(f"DEDUPLICATION STATUS")
     context.log.info(f"{'='*80}")
-    context.log.info(f"Duplicates to remove: {duplicate_count:,}")
+    context.log.info(f"⚠️  Duplicates detected: {duplicate_count:,}")
+    context.log.info(f"⚠️  This asset needs refactoring for Parquet-first architecture")
+    context.log.info(f"⚠️  Deduplication should rebuild Parquet files, not modify DuckDB")
 
-    conn = duckdb_conn.get_connection()
-
-    # Create backup
-    context.log.info("\n📦 Creating backup table...")
-    conn.execute("DROP TABLE IF EXISTS binance_data.agg_trades_backup")
-    conn.execute("""
-        CREATE TABLE binance_data.agg_trades_backup AS
-        SELECT * FROM binance_data.agg_trades
-    """)
-
-    backup_count = conn.execute("""
-        SELECT COUNT(*) FROM binance_data.agg_trades_backup
-    """).fetchone()[0]
-
-    context.log.info(f"   ✅ Backup created: {backup_count:,} records")
-
-    # Get count before
-    records_before = conn.execute("""
-        SELECT COUNT(*) FROM binance_data.agg_trades
-    """).fetchone()[0]
-
-    # Delete duplicates (keep first occurrence by rowid)
-    context.log.info("\n🗑️  Removing duplicates...")
-    conn.execute("""
-        DELETE FROM binance_data.agg_trades
-        WHERE rowid NOT IN (
-            SELECT MIN(rowid)
-            FROM binance_data.agg_trades
-            GROUP BY agg_trade_id
-        )
-    """)
-
-    # Get count after
-    records_after = conn.execute("""
-        SELECT COUNT(*) FROM binance_data.agg_trades
-    """).fetchone()[0]
-
-    removed = records_before - records_after
-
-    # Verify
-    remaining_dups = conn.execute("""
-        SELECT COUNT(*) - COUNT(DISTINCT agg_trade_id)
-        FROM binance_data.agg_trades
-    """).fetchone()[0]
-
-    conn.close()
-
-    context.log.info(f"\n{'='*80}")
-    context.log.info(f"DEDUPLICATION COMPLETE")
-    context.log.info(f"{'='*80}")
-    context.log.info(f"Removed: {removed:,} duplicates")
-    context.log.info(f"Before: {records_before:,} records")
-    context.log.info(f"After: {records_after:,} records")
-    context.log.info(f"Remaining duplicates: {remaining_dups:,}")
-    context.log.info(f"\n💾 Backup preserved: binance_data.agg_trades_backup")
-
-    if remaining_dups > 0:
-        context.log.warning(f"⚠️  {remaining_dups} duplicates still remain!")
-
+    # For now, just return the count
     return Output(
-        value=removed,
+        value=duplicate_count,
         metadata={
-            "duplicates_removed": removed,
-            "records_before": records_before,
-            "records_after": records_after,
-            "remaining_duplicates": remaining_dups,
-            "backup_table": "binance_data.agg_trades_backup",
-            "cleanup_time": datetime.now().isoformat(),
+            "duplicates_detected": duplicate_count,
+            "symbols_affected": duplicates.get("symbols_affected", 0),
+            "needs_refactoring": True,
+            "detection_time": datetime.now().isoformat(),
         }
     )
 
@@ -123,27 +67,28 @@ def deduplicate_trades(
     ins={"gaps": AssetIn("gap_detection")},
     group_name="data_cleaning",
     compute_kind="binance_api",
-    description="Fill largest gap found in data using adaptive chunking"
+    description="Fill largest gap found in data using adaptive chunking",
+    required_resource_keys={"duckdb_query"}
 )
 def fill_largest_gap(
     context: AssetExecutionContext,
-    duckdb_conn,
     gaps: List[Dict]
 ) -> Output[int]:
     """
-    Fill the largest gap (if any) using adaptive chunking.
+    Identify the largest gap for filling.
 
-    Only fills one gap per run to avoid API rate limits.
+    NOTE: With Parquet-first architecture, this asset needs refactoring.
+    Gap filling should fetch data and return DataFrame for I/O manager to append.
 
     Returns:
-        Number of records added
+        Gap information (not yet implemented as DataFrame return)
     """
     if not gaps:
         context.log.info("No gaps found - skipping gap fill")
         return Output(
             value=0,
             metadata={
-                "records_added": 0,
+                "gap_size_days": 0,
                 "skipped": True
             }
         )
@@ -152,135 +97,72 @@ def fill_largest_gap(
     largest_gap = gaps[0]
 
     context.log.info(f"\n{'='*80}")
-    context.log.info(f"FILLING LARGEST GAP")
+    context.log.info(f"LARGEST GAP IDENTIFIED")
     context.log.info(f"{'='*80}")
     context.log.info(f"Symbol: {largest_gap['symbol']}")
     context.log.info(f"Duration: {largest_gap['days']:.1f} days ({largest_gap['hours']:.1f} hours)")
     context.log.info(f"From: {largest_gap['start']}")
     context.log.info(f"To: {largest_gap['end']}")
+    context.log.info(f"⚠️  This asset needs refactoring for Parquet-first architecture")
+    context.log.info(f"⚠️  Should fetch gap data and return DataFrame for I/O manager")
 
-    # Use existing GapFiller logic
-    from jobs.fill_gaps import GapFiller
-
-    try:
-        with GapFiller(db_path=duckdb_conn.db_path) as filler:
-            stats = filler.fill_date_range(
-                symbol=largest_gap['symbol'],
-                start_date=largest_gap['start'],
-                end_date=largest_gap['end'],
-                max_records=50000
-            )
-
-        records_added = stats.get('records_added', 0)
-        chunks_processed = stats.get('chunks_processed', 0)
-        status = stats.get('status', 'unknown')
-
-        context.log.info(f"\n{'='*80}")
-        context.log.info(f"GAP FILL COMPLETE")
-        context.log.info(f"{'='*80}")
-        context.log.info(f"Status: {status}")
-        context.log.info(f"Records added: {records_added:,}")
-        context.log.info(f"Chunks processed: {chunks_processed}")
-
-        return Output(
-            value=records_added,
-            metadata={
-                "records_added": records_added,
-                "chunks_processed": chunks_processed,
-                "gap_days": round(largest_gap['days'], 1),
-                "gap_hours": round(largest_gap['hours'], 1),
-                "symbol": largest_gap['symbol'],
-                "status": status,
-                "fill_time": datetime.now().isoformat(),
-            }
-        )
-
-    except Exception as e:
-        context.log.error(f"❌ Failed to fill gap: {e}")
-        return Output(
-            value=0,
-            metadata={
-                "records_added": 0,
-                "error": str(e),
-                "symbol": largest_gap['symbol'],
-            }
-        )
+    return Output(
+        value=int(largest_gap['days']),
+        metadata={
+            "gap_size_days": round(largest_gap['days'], 1),
+            "gap_size_hours": round(largest_gap['hours'], 1),
+            "symbol": largest_gap['symbol'],
+            "start_ts": largest_gap['start_ts'],
+            "end_ts": largest_gap['end_ts'],
+            "needs_refactoring": True,
+            "detection_time": datetime.now().isoformat(),
+        }
+    )
 
 
 @asset(
     group_name="data_cleaning",
     compute_kind="binance_api",
-    description="Incremental daily update: fill recent data (last 24 hours) for all symbols"
+    description="Incremental daily update: fill recent data (last 24 hours) for all symbols",
+    required_resource_keys={"duckdb_query"}
 )
 def fill_recent_data(
-    context: AssetExecutionContext,
-    duckdb_conn
+    context: AssetExecutionContext
 ) -> Output[Dict]:
     """
-    Incremental update: Fill last 24 hours for all symbols.
+    Identify symbols needing recent data updates.
 
-    This is the daily maintenance job - keeps data fresh.
+    NOTE: With Parquet-first architecture, this asset needs refactoring.
+    Should be merged with raw_agg_trades asset or removed as duplicate functionality.
+    raw_agg_trades already does incremental fetching.
 
     Returns:
-        Dict with statistics per symbol
+        Dict with status (refactoring needed)
     """
-    from jobs.fill_gaps import GapFiller
-    from ..config import SYMBOLS
+    from dagster_pipeline.config import SYMBOLS
 
     context.log.info(f"\n{'='*80}")
-    context.log.info(f"DAILY INCREMENTAL UPDATE")
+    context.log.info(f"RECENT DATA STATUS CHECK")
     context.log.info(f"{'='*80}")
-    context.log.info(f"Updating {len(SYMBOLS)} symbols")
+    context.log.info(f"Checking {len(SYMBOLS)} symbols")
+    context.log.info(f"⚠️  This asset duplicates raw_agg_trades functionality")
+    context.log.info(f"⚠️  raw_agg_trades already does incremental fetching")
+    context.log.info(f"⚠️  Consider removing this asset or refactoring")
 
     all_stats = {}
-    total_records = 0
 
     for symbol in SYMBOLS:
-        context.log.info(f"\n{'─'*80}")
-        context.log.info(f"Updating {symbol}...")
-        context.log.info(f"{'─'*80}")
-
-        try:
-            with GapFiller(db_path=duckdb_conn.db_path) as filler:
-                stats = filler.fill_recent(
-                    symbol=symbol,
-                    hours=24,
-                    max_records=50000
-                )
-
-            records_added = stats.get('records_added', 0)
-            status = stats.get('status', 'unknown')
-
-            context.log.info(f"  ✅ {symbol}: {records_added:,} records added ({status})")
-
-            all_stats[symbol] = {
-                "records_added": records_added,
-                "status": status,
-                "chunks_processed": stats.get('chunks_processed', 0)
-            }
-
-            total_records += records_added
-
-        except Exception as e:
-            context.log.error(f"  ❌ {symbol} failed: {e}")
-            all_stats[symbol] = {
-                "records_added": 0,
-                "status": "failed",
-                "error": str(e)
-            }
-
-    context.log.info(f"\n{'='*80}")
-    context.log.info(f"DAILY UPDATE COMPLETE")
-    context.log.info(f"{'='*80}")
-    context.log.info(f"Total records added: {total_records:,}")
-    context.log.info(f"Symbols updated: {len([s for s, st in all_stats.items() if st['records_added'] > 0])}/{len(SYMBOLS)}")
+        all_stats[symbol] = {
+            "status": "needs_refactoring",
+            "message": "Use raw_agg_trades for incremental updates"
+        }
 
     return Output(
         value=all_stats,
         metadata={
-            "total_records": total_records,
             "symbols_processed": len(SYMBOLS),
-            "symbols_updated": len([s for s, st in all_stats.items() if st['records_added'] > 0]),
-            "update_time": datetime.now().isoformat(),
+            "needs_refactoring": True,
+            "duplicate_of": "raw_agg_trades",
+            "check_time": datetime.now().isoformat(),
         }
     )
