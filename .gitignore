@@ -70,8 +70,13 @@ venv.bak/
 logs/
 
 # dlt specific
-.dlt/
+.dlt/*.db
+.dlt/pipelines/
+.dlt_staging/
 _dlt_*
+
+# Dagster temporary directories
+.tmp_dagster_home*/
 
 # Testing
 .pytest_cache/

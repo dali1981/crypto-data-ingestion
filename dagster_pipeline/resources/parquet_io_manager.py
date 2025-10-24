@@ -53,19 +53,21 @@ class ParquetIOManager(IOManager):
 
         Args:
             context: Output context with asset metadata
-            obj: DataFrame to store
+            obj: DataFrame or dict to store
         """
+        # Handle dict outputs (metadata from assets like raw_agg_trades)
+        if isinstance(obj, dict):
+            context.log.info(f"Received metadata output: {obj}")
+            # Data already written to parquet by the asset itself
+            # Just update the DuckDB view
+            self._update_duckdb_view(context)
+            return
+
         if obj is None or (isinstance(obj, pd.DataFrame) and obj.empty):
             context.log.info("No data to store")
             return
 
-        # Convert to DataFrame if needed
         if not isinstance(obj, pd.DataFrame):
-            if isinstance(obj, dict):
-                # Handle dict outputs (like from raw_agg_trades)
-                context.log.info(f"Received dict output with keys: {obj.keys()}")
-                # Store metadata only, actual data already in Parquet via dlt
-                return
             context.log.warning(f"Unexpected output type: {type(obj)}")
             return
 

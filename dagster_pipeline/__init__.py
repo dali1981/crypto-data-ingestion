@@ -1,12 +1,12 @@
 """Dagster pipeline for Binance tick data acquisition and maintenance."""
 
 from dagster import Definitions
-from dagster_dlt import DagsterDltResource
 
 # Use absolute imports instead of relative imports for Dagster compatibility
 from dagster_pipeline.assets.raw_data import raw_agg_trades_dlt, raw_order_books
 from dagster_pipeline.assets.data_quality import duplicate_detection, gap_detection
 from dagster_pipeline.assets.data_cleaning import deduplicate_trades, fill_largest_gap, fill_recent_data
+from dagster_pipeline.assets.asset_checks import validate_agg_trades_files, validate_agg_trades_coverage
 from dagster_pipeline.resources import binance_api_resource, duckdb_query_resource, parquet_io_manager
 # Jobs, schedules, and sensors temporarily disabled during migration to DLT
 # TODO: Re-enable and update after DLT integration is stable
@@ -31,7 +31,7 @@ from dagster_pipeline.resources import binance_api_resource, duckdb_query_resour
 
 defs = Definitions(
     assets=[
-        # Raw data acquisition (using dagster-dlt)
+        # Raw data acquisition
         raw_agg_trades_dlt,
         raw_order_books,
 
@@ -45,8 +45,12 @@ defs = Definitions(
         fill_recent_data,
     ],
 
+    asset_checks=[
+        validate_agg_trades_files,
+        validate_agg_trades_coverage,
+    ],
+
     resources={
-        "dlt": DagsterDltResource(),  # DLT integration resource
         "binance_api": binance_api_resource,
         "duckdb_query": duckdb_query_resource,
         "io_manager": parquet_io_manager,

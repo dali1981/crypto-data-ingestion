@@ -1,0 +1,22 @@
+# DLT Configuration
+# Optimized for incremental updates with frequent writes
+
+# DEFAULT/DEVELOPMENT CONFIGURATION
+# Flush data frequently to see progress (every 10K records)
+[data_writer]
+# buffer_max_items controls when data flushes to temp JSONL files (extract stage)
+# Smaller buffers = more frequent writes = visible progress during long-running fetches
+buffer_max_items = 10000    # Flush every 10K records for dev visibility (default: 5000)
+file_max_items = 50000      # Parquet file size
+
+[normalize.data_writer]
+buffer_max_items = 10000    # Normalize buffer matches extract buffer
+
+# PRODUCTION CONFIGURATION
+# Larger buffers for better throughput with bulk historical data
+[production.data_writer]
+buffer_max_items = 100000   # Flush every 100K records in production
+file_max_items = 500000     # Larger parquet files for better compression
+
+[production.normalize.data_writer]
+buffer_max_items = 100000   # Normalize buffer matches extract buffer

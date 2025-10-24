@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, patch, PropertyMock
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from binance.exceptions import BinanceAPIException
 import dlt
 
@@ -77,15 +77,23 @@ def expected_transformed_trades():
     ]
 
 
+@patch("binance_tick_data.sources.rest_api._rate_limiter")
 class TestFetchAggTrades:
     """Test suite for fetch_agg_trades function."""
 
+    @patch("binance_tick_data.sources.rest_api.datetime")
     @patch("binance_tick_data.sources.rest_api.Client")
-    def test_initial_run_with_start_date(self, mock_client_class, mock_config, sample_trades, expected_transformed_trades):
+    def test_initial_run_with_start_date(self, mock_client_class, mock_datetime, mock_rate_limiter, mock_config, sample_trades, expected_transformed_trades):
         """Test initial data fetch using start_date."""
-        # Setup mock client
+        # Mock datetime for cutoff calculation
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = now
+        mock_datetime.strptime = datetime.strptime
+        mock_datetime.fromtimestamp = datetime.fromtimestamp
+
+        # Setup mock client - return trades then empty to end loop
         mock_client = Mock()
-        mock_client.get_aggregate_trades.return_value = sample_trades
+        mock_client.get_aggregate_trades.side_effect = [sample_trades, []]
         mock_client_class.return_value = mock_client
 
         # Create resource
@@ -105,18 +113,17 @@ class TestFetchAggTrades:
             requests_params={'timeout': 60}
         )
 
-        # Verify API call
+        # Verify API call (should be called twice - once for data, once returns empty)
         expected_start_ts = int(datetime.strptime("2024-01-01", "%Y-%m-%d").timestamp() * 1000)
-        mock_client.get_aggregate_trades.assert_called_once_with(
-            symbol="BTCUSDT",
-            limit=1000,
-            startTime=expected_start_ts
-        )
+        first_call = mock_client.get_aggregate_trades.call_args_list[0]
+        assert first_call[1]['symbol'] == "BTCUSDT"
+        assert first_call[1]['limit'] == 1000
+        assert first_call[1]['startTime'] == expected_start_ts
 
-        # Verify transformed data
-        # The resource yields transformed_trades as a list, so result is a list of items
-        assert len(result) == len(expected_transformed_trades)
-        assert result == expected_transformed_trades
+        # Verify transformed data (should have one batch)
+        assert len(result) == 1
+        assert len(result[0]) == len(expected_transformed_trades)
+        assert result[0] == expected_transformed_trades
 
     @patch("binance_tick_data.sources.rest_api.Client")
     def test_no_trades_available(self, mock_client_class, mock_config):
@@ -369,3 +376,144 @@ class TestFetchAggTrades:
         assert resource.name == "agg_trades_btcusdt"
         # Verify the resource has the _pipe attribute indicating it's a DLT resource
         assert hasattr(resource, '_pipe')
+
+    @patch("binance_tick_data.sources.rest_api._rate_limiter")
+    @patch("binance_tick_data.sources.rest_api.Client")
+    @patch("binance_tick_data.sources.rest_api.datetime")
+    def test_loop_fetches_until_cutoff_time(self, mock_datetime, mock_client_class, mock_rate_limiter, mock_config):
+        """Test that loop continues fetching until cutoff time is reached."""
+        # Setup mock datetime for cutoff calculation
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        cutoff = now - timedelta(hours=1)
+        mock_datetime.now.return_value = now
+        mock_datetime.fromtimestamp = datetime.fromtimestamp
+        mock_datetime.strptime = datetime.strptime
+
+        # Setup mock client with multiple batches
+        mock_client = Mock()
+
+        # First batch: before cutoff
+        batch1 = [
+            {"a": 1000, "p": "50000", "q": "0.1", "f": 999, "l": 1001,
+             "T": int((cutoff - timedelta(minutes=30)).timestamp() * 1000),
+             "m": True, "M": True}
+        ]
+
+        # Second batch: crosses cutoff
+        batch2 = [
+            {"a": 1001, "p": "50001", "q": "0.2", "f": 1002, "l": 1003,
+             "T": int((cutoff + timedelta(minutes=30)).timestamp() * 1000),
+             "m": False, "M": True}
+        ]
+
+        mock_client.get_aggregate_trades.side_effect = [batch1, batch2]
+        mock_client_class.return_value = mock_client
+
+        # Create and execute resource
+        resource = create_agg_trades_resource(
+            config=mock_config,
+            symbol="BTCUSDT",
+            start_date="2024-01-01"
+        )
+
+        result = list(resource)
+
+        # Should have fetched 2 batches
+        assert mock_client.get_aggregate_trades.call_count == 2
+        # Should have called rate limiter twice
+        assert mock_rate_limiter.wait_if_needed.call_count == 2
+
+        # Result should only include first batch (second filtered out by cutoff)
+        assert len(result) == 1
+
+    @patch("binance_tick_data.sources.rest_api._rate_limiter")
+    @patch("binance_tick_data.sources.rest_api.Client")
+    @patch("binance_tick_data.sources.rest_api.datetime")
+    def test_skip_if_already_up_to_date(self, mock_datetime, mock_client_class, mock_rate_limiter, mock_config):
+        """Test that resource skips fetching if already up-to-date."""
+        # Setup mock datetime
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        cutoff = now - timedelta(hours=1)
+        mock_datetime.now.return_value = now
+        mock_datetime.strptime = datetime.strptime
+
+        # Setup mock client
+        mock_client = Mock()
+
+        # Test trade is after cutoff (recent)
+        test_trade = [{
+            "a": 1000, "p": "50000", "q": "0.1", "f": 999, "l": 1001,
+            "T": int(now.timestamp() * 1000),  # Very recent
+            "m": True, "M": True
+        }]
+
+        mock_client.get_aggregate_trades.return_value = test_trade
+        mock_client_class.return_value = mock_client
+
+        # Create resource with incremental state (simulating already having data)
+        resource = create_agg_trades_resource(
+            config=mock_config,
+            symbol="BTCUSDT",
+            start_date="2024-01-01"
+        )
+
+        # Mock incremental to have a last value
+        mock_incremental = Mock()
+        mock_incremental.last_value = 999
+
+        result = list(resource(incremental=mock_incremental))
+
+        # Should have made test query
+        assert mock_client.get_aggregate_trades.call_count == 1
+        # Should return empty (skipped)
+        assert len(result) == 0
+
+    @patch("binance_tick_data.sources.rest_api._rate_limiter")
+    @patch("binance_tick_data.sources.rest_api.Client")
+    def test_rate_limiter_called_before_api_requests(self, mock_client_class, mock_rate_limiter, mock_config):
+        """Test that rate limiter is called before each API request."""
+        mock_client = Mock()
+        mock_client.get_aggregate_trades.return_value = []
+        mock_client_class.return_value = mock_client
+
+        resource = create_agg_trades_resource(
+            config=mock_config,
+            symbol="BTCUSDT",
+            start_date="2024-01-01"
+        )
+
+        list(resource)
+
+        # Rate limiter should have been called at least once
+        assert mock_rate_limiter.wait_if_needed.called
+
+    @patch("binance_tick_data.sources.rest_api._rate_limiter")
+    @patch("binance_tick_data.sources.rest_api.Client")
+    def test_429_error_triggers_backoff(self, mock_client_class, mock_rate_limiter, mock_config, sample_trades):
+        """Test that 429 errors trigger rate limiter backoff."""
+        mock_client = Mock()
+
+        # First call: 429 error
+        # Second call: success
+        mock_client.get_aggregate_trades.side_effect = [
+            BinanceAPIException(
+                response=Mock(status_code=429, text="Rate limit"),
+                status_code=429,
+                text="Rate limit"
+            ),
+            sample_trades
+        ]
+        mock_client_class.return_value = mock_client
+
+        resource = create_agg_trades_resource(
+            config=mock_config,
+            symbol="BTCUSDT",
+            start_date="2024-01-01"
+        )
+
+        list(resource)
+
+        # Should have called handle_429
+        assert mock_rate_limiter.handle_429.called
+        # Should have retried and succeeded
+        assert mock_client.get_aggregate_trades.call_count == 2

@@ -3,13 +3,17 @@
 import dlt
 import logging
 from typing import Iterator, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 import time
 from ..config import BinanceConfig
+from ..utils.rate_limiter import BinanceRateLimiter
 
 logger = logging.getLogger(__name__)
+
+# Global rate limiter shared across all symbols to prevent IP-level rate limiting
+_rate_limiter = BinanceRateLimiter()
 
 
 @dlt.source
@@ -80,9 +84,14 @@ def create_agg_trades_resource(
         primary_key="agg_trade_id",
     )
     def _fetch_agg_trades(
-        incremental: dlt.sources.incremental[int] = dlt.sources.incremental("timestamp", initial_value=None),
+        incremental: dlt.sources.incremental[int] = dlt.sources.incremental("agg_trade_id", initial_value=None),
     ) -> Iterator[dict]:
-        """Fetch aggregated trades for a single symbol with incremental loading."""
+        """
+        Fetch aggregated trades for a single symbol with incremental loading.
+
+        Loops fetching batches of 1000 trades until reaching current_time - 1 hour.
+        Uses global rate limiter to prevent IP-level rate limiting.
+        """
         # Increase timeout to 60 seconds for large data fetches
         client = Client(
             config.api_key,
@@ -90,38 +99,98 @@ def create_agg_trades_resource(
             requests_params={'timeout': 60}
         )
 
-        # Use incremental cursor's last value if available, otherwise use start_date
-        last_timestamp = incremental.last_value
-        is_incremental_run = last_timestamp is not None
+        # Calculate cutoff time (current time - 1 hour)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        cutoff_ts_ms = int(cutoff_time.timestamp() * 1000)
 
+        # Use incremental cursor's last value if available, otherwise use start_date
+        last_agg_trade_id = incremental.last_value
+        is_incremental_run = last_agg_trade_id is not None
+
+        # Determine starting point
         if is_incremental_run:
-            start_ts = last_timestamp + 1
-            logger.info(f"[{symbol}] Incremental loading from {datetime.fromtimestamp(start_ts / 1000)}")
+            from_id = last_agg_trade_id + 1
+            logger.info(f"[{symbol}] Resuming from agg_trade_id {from_id}")
+
+            # Check if already up-to-date by fetching one trade
+            try:
+                _rate_limiter.wait_if_needed(weight=1)
+                test_trades = client.get_aggregate_trades(
+                    symbol=symbol,
+                    limit=1,
+                    fromId=from_id
+                )
+
+                # Update rate limiter from response (if python-binance exposes headers)
+                # Note: python-binance Client doesn't expose headers easily,
+                # but rate limiter will still work with token bucket
+
+                if not test_trades or test_trades[0]["T"] > cutoff_ts_ms:
+                    logger.info(
+                        f"[{symbol}] Already up-to-date "
+                        f"(last trade within 1 hour of current time)"
+                    )
+                    return
+
+            except BinanceAPIException as e:
+                if e.status_code == 429:
+                    _rate_limiter.handle_429()
+                logger.error(f"[{symbol}] Error checking if up-to-date: {e}")
+                return
         else:
             start_ts = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000)
-            logger.info(f"[{symbol}] Initial backfill from {start_date}")
+            from_id = None
+            logger.info(f"[{symbol}] Starting initial backfill from {start_date}")
+
+        # Loop fetching batches until we reach cutoff time
+        batch_count = 0
+        total_trades = 0
 
         try:
-            from_id = None
-            batch_count = 0
-            current_day = None  # Track current day for logging
-
             while True:
-                if from_id:
-                    trades = client.get_aggregate_trades(
-                        symbol=symbol,
-                        limit=1000,
-                        fromId=from_id
-                    )
-                else:
-                    trades = client.get_aggregate_trades(
-                        symbol=symbol,
-                        limit=1000,
-                        startTime=start_ts
-                    )
+                # Rate limit before API call
+                _rate_limiter.wait_if_needed(weight=1)
+
+                # Fetch batch
+                try:
+                    if from_id is not None:
+                        # Incremental: use fromId
+                        trades = client.get_aggregate_trades(
+                            symbol=symbol,
+                            limit=1000,
+                            fromId=from_id
+                        )
+                    else:
+                        # Initial: use startTime
+                        trades = client.get_aggregate_trades(
+                            symbol=symbol,
+                            limit=1000,
+                            startTime=start_ts
+                        )
+                except BinanceAPIException as e:
+                    if e.status_code == 429:
+                        _rate_limiter.handle_429()
+                        continue  # Retry after backoff
+                    else:
+                        logger.error(f"[{symbol}] API error: {e}")
+                        return
 
                 if not trades:
+                    logger.info(f"[{symbol}] No more data available from Binance")
                     break
+
+                # Check if we've reached cutoff time
+                last_trade_ts = trades[-1]["T"]
+                if last_trade_ts > cutoff_ts_ms:
+                    # Filter trades to only include those before cutoff
+                    trades = [t for t in trades if t["T"] <= cutoff_ts_ms]
+
+                    if not trades:
+                        logger.info(
+                            f"[{symbol}] Reached cutoff time "
+                            f"({cutoff_time.strftime('%Y-%m-%d %H:%M:%S')} UTC)"
+                        )
+                        break
 
                 # Transform to match schema
                 transformed_trades = [
@@ -139,40 +208,36 @@ def create_agg_trades_resource(
                     for trade in trades
                 ]
 
-                # Log when starting a new day of data
-                first_trade_day = datetime.fromtimestamp(trades[0]["T"] / 1000).date()
-                if current_day != first_trade_day:
-                    current_day = first_trade_day
-                    logger.info(f"[{symbol}] Downloading {current_day}")
+                # Update progress tracking
+                batch_count += 1
+                total_trades += len(transformed_trades)
 
-                # Yield in smaller chunks to enable incremental loading
+                # Update from_id for next iteration
+                from_id = transformed_trades[-1]["agg_trade_id"] + 1
+
+                # Log progress
+                first_trade_time = datetime.fromtimestamp(trades[0]["T"] / 1000, tz=timezone.utc)
+                last_trade_time = datetime.fromtimestamp(trades[-1]["T"] / 1000, tz=timezone.utc)
+
+                logger.info(
+                    f"[{symbol}] Batch {batch_count}: {first_trade_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                    f"to {last_trade_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                    f"({len(transformed_trades)} trades, {total_trades} total)"
+                )
+
+                # Yield the batch
                 yield transformed_trades
-                batch_count += len(transformed_trades)
 
-                # Check if we've hit the max records limit (for testing)
-                if config.historical_max_records and batch_count >= config.historical_max_records:
-                    logger.info(f"[{symbol}] Reached max records limit ({config.historical_max_records:,})")
+                # Check if we've reached cutoff after yielding
+                if last_trade_ts > cutoff_ts_ms:
+                    logger.info(
+                        f"[{symbol}] Completed: {batch_count} batches, "
+                        f"{total_trades} trades fetched"
+                    )
                     break
 
-                # For incremental runs (NOT initial backfill), limit batch size
-                # Keeps incremental jobs fast (~5 seconds per symbol)
-                if is_incremental_run and batch_count >= config.incremental_batch_size:
-                    logger.info(f"[{symbol}] Incremental batch complete ({batch_count:,} trades)")
-                    break
-
-                # Get next batch
-                from_id = trades[-1]["a"] + 1
-
-                # Rate limiting
-                time.sleep(0.1)
-
-                # Stop if we've reached current time
-                if trades[-1]["T"] >= int(time.time() * 1000):
-                    logger.info(f"[{symbol}] Reached current time ({batch_count:,} total trades)")
-                    break
-
-        except BinanceAPIException as e:
-            logger.error(f"[{symbol}] Error: {e}")
+        except Exception as e:
+            logger.error(f"[{symbol}] Unexpected error: {e}", exc_info=True)
             return
 
     return _fetch_agg_trades

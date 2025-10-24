@@ -92,6 +92,41 @@ class DuckDBQueryResource(ConfigurableResource):
         except Exception:
             return 0
 
+    def query_agg_trades(
+        self,
+        symbols: list[str] = None,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> pd.DataFrame:
+        """
+        Query aggregate trades with optional filtering.
+
+        Args:
+            symbols: List of symbols to filter (e.g., ['BTCUSDT', 'ETHUSDT'])
+            start_date: Start date filter (YYYY-MM-DD)
+            end_date: End date filter (YYYY-MM-DD)
+
+        Returns:
+            Filtered aggregate trades DataFrame
+        """
+        # Build query
+        where_clauses = []
+
+        if symbols:
+            symbol_list = "', '".join(symbols)
+            where_clauses.append(f"symbol IN ('{symbol_list}')")
+
+        if start_date:
+            where_clauses.append(f"date >= '{start_date}'")
+
+        if end_date:
+            where_clauses.append(f"date <= '{end_date}'")
+
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+        sql = f"SELECT * FROM {self.dataset_name}.agg_trades {where_sql}"
+        return self.query(sql)
+
 
 # Default resource instance
 duckdb_query_resource = DuckDBQueryResource(
