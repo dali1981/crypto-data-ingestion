@@ -12,6 +12,9 @@ file_max_items = 50000      # Parquet file size
 [normalize.data_writer]
 buffer_max_items = 10000    # Normalize buffer matches extract buffer
 
+[destination.filesystem]
+bucket_url = "dev/data"     # Dev writes to dev/data directory
+
 # PRODUCTION CONFIGURATION
 # Larger buffers for better throughput with bulk historical data
 [production.data_writer]
@@ -20,3 +23,6 @@ file_max_items = 500000     # Larger parquet files for better compression
 
 [production.normalize.data_writer]
 buffer_max_items = 100000   # Normalize buffer matches extract buffer
+
+[production.destination.filesystem]
+bucket_url = "data"         # Production writes to data directory

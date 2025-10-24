@@ -56,6 +56,11 @@ venv.bak/
 !pyproject.toml
 !package.json
 
+# Pipeline output directories
+dev/        # Dev pipeline output
+data/       # Production pipeline output (excluding test fixtures)
+!data/test_parquet/
+
 # Output files
 *.png
 *.jpg
