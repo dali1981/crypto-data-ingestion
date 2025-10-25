@@ -79,9 +79,11 @@ def create_agg_trades_resource(
         DLT resource configured for this symbol
     """
     @dlt.resource(
-        name=f"agg_trades_{symbol.lower()}",
+        name=f"agg_trades_{symbol.lower()}",  # Resource name (internal)
+        table_name=symbol.upper(),             # Table name = symbol
         write_disposition="append",
         primary_key="agg_trade_id",
+        columns={"date": {"partition": True}},  # Partition by trade date
     )
     def _fetch_agg_trades(
         incremental: dlt.sources.incremental[int] = dlt.sources.incremental("agg_trade_id", initial_value=None),
@@ -193,8 +195,12 @@ def create_agg_trades_resource(
                         break
 
                 # Transform to match schema
-                transformed_trades = [
-                    {
+                transformed_trades = []
+                for trade in trades:
+                    # Extract date for partitioning
+                    dt = datetime.fromtimestamp(trade["T"] / 1000, tz=timezone.utc)
+
+                    transformed_trades.append({
                         "agg_trade_id": trade["a"],
                         "price": trade["p"],
                         "quantity": trade["q"],
@@ -204,9 +210,8 @@ def create_agg_trades_resource(
                         "is_buyer_maker": trade["m"],
                         "is_best_match": trade["M"],
                         "symbol": symbol,
-                    }
-                    for trade in trades
-                ]
+                        "date": dt.date().isoformat(),  # Add date for partitioning
+                    })
 
                 # Update progress tracking
                 batch_count += 1
