@@ -2,12 +2,12 @@
 # Optimized for incremental updates with frequent writes
 
 # DEFAULT/DEVELOPMENT CONFIGURATION
-# Flush data frequently to see progress (every 10K records)
+# Note: Files are written to destination only when pipeline.run() completes
 [data_writer]
-# buffer_max_items controls when data flushes to temp JSONL files (extract stage)
-# Smaller buffers = more frequent writes = visible progress during long-running fetches
-buffer_max_items = 10000    # Flush every 10K records for dev visibility (default: 5000)
-file_max_items = 50000      # Parquet file size
+# buffer_max_items controls memory buffer size before flushing to temp staging files
+# Smaller buffers = less memory usage, more frequent temp file writes
+buffer_max_items = 10000    # Flush to temp files every 10K records (default: 5000)
+file_max_items = 50000      # Parquet file size (max items per parquet file)
 
 [normalize.data_writer]
 buffer_max_items = 10000    # Normalize buffer matches extract buffer
@@ -16,9 +16,9 @@ buffer_max_items = 10000    # Normalize buffer matches extract buffer
 bucket_url = "dev/data"     # Dev writes to dev/data directory
 
 # PRODUCTION CONFIGURATION
-# Larger buffers for better throughput with bulk historical data
+# Larger buffers for better throughput and compression
 [production.data_writer]
-buffer_max_items = 100000   # Flush every 100K records in production
+buffer_max_items = 100000   # Flush to temp files every 100K records
 file_max_items = 500000     # Larger parquet files for better compression
 
 [production.normalize.data_writer]

@@ -250,3 +250,153 @@ def create_agg_trades_resource(
 
 # Dead code removed: order_book_snapshots()
 # This is now handled by the Dagster asset raw_order_books in dagster_pipeline/assets/raw_data.py
+
+
+def create_daily_candles_resource(
+    config: BinanceConfig,
+    symbol: str,
+    start_date: str,
+) -> dlt.resource:
+    """
+    Create a DLT resource for daily candlestick data.
+
+    Uses MERGE write disposition because:
+    - Today's incomplete candle updates throughout the day
+    - Re-running historical data won't create duplicates
+    - Small dataset (~365 rows/year) - merge overhead negligible
+
+    Args:
+        config: BinanceConfig instance
+        symbol: Trading symbol (e.g., "BTCUSDT")
+        start_date: Start date in YYYY-MM-DD format
+
+    Returns:
+        DLT resource for daily candles
+    """
+    @dlt.resource(
+        name=f"daily_candles_{symbol.lower()}",
+        table_name=f"{symbol.upper()}_DAILY",
+        write_disposition="merge",                    # Auto-dedup on re-run
+        primary_key=["symbol", "open_time"],          # Composite unique key
+    )
+    def _fetch_daily_candles(
+        incremental: dlt.sources.incremental[int] = dlt.sources.incremental(
+            "open_time",
+            initial_value=None
+        )
+    ) -> Iterator[dict]:
+        """Fetch daily candles with incremental loading."""
+
+        client = Client(
+            config.api_key,
+            config.api_secret,
+            requests_params={'timeout': 60}
+        )
+
+        # Calculate date range (fetch up to yesterday, exclude today's incomplete candle)
+        end_date = datetime.now(timezone.utc) - timedelta(days=1)
+        end_date = end_date.replace(hour=23, minute=59, second=59)
+
+        last_open_time = incremental.last_value
+
+        if last_open_time:
+            # Incremental: start from next day after last candle
+            start_dt = datetime.fromtimestamp(last_open_time / 1000, tz=timezone.utc)
+            start_dt = start_dt + timedelta(days=1)
+            logger.info(f"[{symbol}] Resuming candles from {start_dt.date()}")
+        else:
+            # Initial: use config start_date
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+            logger.info(f"[{symbol}] Starting initial candle fetch from {start_date}")
+
+        # Don't fetch if already up-to-date
+        if start_dt.date() > end_date.date():
+            logger.info(f"[{symbol}] Already up-to-date (no new complete candles)")
+            return
+
+        # Fetch klines
+        try:
+            _rate_limiter.wait_if_needed(weight=2)  # Klines endpoint weight = 2
+
+            candles = client.get_historical_klines(
+                symbol=symbol,
+                interval=Client.KLINE_INTERVAL_1DAY,
+                start_str=int(start_dt.timestamp() * 1000),
+                end_str=int(end_date.timestamp() * 1000),
+                limit=1000
+            )
+
+            if not candles:
+                logger.info(f"[{symbol}] No candles returned")
+                return
+
+            # Transform to schema
+            transformed_candles = []
+            for candle in candles:
+                open_dt = datetime.fromtimestamp(candle[0] / 1000, tz=timezone.utc)
+
+                transformed_candles.append({
+                    "symbol": symbol,
+                    "open_time": candle[0],
+                    "open": candle[1],
+                    "high": candle[2],
+                    "low": candle[3],
+                    "close": candle[4],
+                    "volume": candle[5],
+                    "close_time": candle[6],
+                    "quote_volume": candle[7],
+                    "trades": candle[8],
+                    "taker_buy_base": candle[9],
+                    "taker_buy_quote": candle[10],
+                    "date": open_dt.date().isoformat(),
+                })
+
+            logger.info(
+                f"[{symbol}] Fetched {len(transformed_candles)} candles "
+                f"({transformed_candles[0]['date']} to {transformed_candles[-1]['date']})"
+            )
+
+            yield transformed_candles
+
+        except BinanceAPIException as e:
+            if e.status_code == 429:
+                _rate_limiter.handle_429()
+            logger.error(f"[{symbol}] API error: {e}")
+            return
+        except Exception as e:
+            logger.error(f"[{symbol}] Unexpected error: {e}", exc_info=True)
+            return
+
+    return _fetch_daily_candles
+
+
+@dlt.source
+def binance_daily_candles(
+    config: BinanceConfig,
+    symbols: Optional[List[str]] = None,
+    start_date: Optional[str] = None,
+):
+    """
+    DLT source for daily candlestick data.
+
+    Completely separate from agg trades - can run independently.
+    Uses merge write disposition for idempotent loads.
+
+    Args:
+        config: BinanceConfig instance
+        symbols: List of symbols to fetch (defaults to config.symbols)
+        start_date: Start date in YYYY-MM-DD format (defaults to config.historical_start_date)
+
+    Returns:
+        DLT source with daily candle resources (one per symbol)
+    """
+    symbols = symbols or config.symbols
+    start_date = start_date or config.historical_start_date
+
+    # Create one resource per symbol for independent processing
+    resources = []
+    for symbol in symbols:
+        resources.append(create_daily_candles_resource(config, symbol, start_date))
+
+    return resources

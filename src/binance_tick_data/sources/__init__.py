@@ -3,6 +3,8 @@
 from .rest_api import (
     binance_historical_data,
     create_agg_trades_resource,
+    binance_daily_candles,
+    create_daily_candles_resource,
 )
 from .websocket import (
     binance_realtime_data,
@@ -14,6 +16,8 @@ from .websocket import (
 __all__ = [
     "binance_historical_data",
     "create_agg_trades_resource",
+    "binance_daily_candles",
+    "create_daily_candles_resource",
     "binance_realtime_data",
     "realtime_trades",
     "realtime_agg_trades",
