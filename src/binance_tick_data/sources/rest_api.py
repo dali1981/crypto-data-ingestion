@@ -252,40 +252,106 @@ def create_agg_trades_resource(
 # This is now handled by the Dagster asset raw_order_books in dagster_pipeline/assets/raw_data.py
 
 
-def create_daily_candles_resource(
+# Interval name mapping for user-friendly names
+INTERVAL_MAP = {
+    "1s": "1SECOND",
+    "1m": "1MINUTE",
+    "3m": "3MINUTE",
+    "5m": "5MINUTE",
+    "15m": "15MINUTE",
+    "30m": "30MINUTE",
+    "1h": "1HOUR",
+    "2h": "2HOUR",
+    "4h": "4HOUR",
+    "6h": "6HOUR",
+    "8h": "8HOUR",
+    "12h": "12HOUR",
+    "1d": "1DAY",
+    "3d": "3DAY",
+    "1w": "1WEEK",
+    "1M": "1MONTH",
+}
+
+
+def _parse_interval_to_timedelta(interval_str: str) -> timedelta:
+    """Parse interval string to timedelta for incremental step calculation."""
+    unit = interval_str[-1]
+    value = int(interval_str[:-1]) if len(interval_str) > 1 else 1
+
+    if unit == 's':
+        return timedelta(seconds=value)
+    elif unit == 'm':
+        return timedelta(minutes=value)
+    elif unit == 'h':
+        return timedelta(hours=value)
+    elif unit == 'd':
+        return timedelta(days=value)
+    elif unit == 'w':
+        return timedelta(weeks=value)
+    elif unit == 'M':
+        return timedelta(days=value * 30)  # Approximate
+    else:
+        raise ValueError(f"Unknown interval unit: {unit}")
+
+
+def _get_cutoff_time(interval_str: str) -> datetime:
+    """Calculate cutoff time based on interval to avoid incomplete candles."""
+    now = datetime.now(timezone.utc)
+
+    # For intraday intervals (< 1 day), use 1 hour buffer
+    # For daily+ intervals, use 1 day buffer
+    if interval_str in ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h"]:
+        return now - timedelta(hours=1)
+    else:
+        return (now - timedelta(days=1)).replace(hour=23, minute=59, second=59)
+
+
+def _create_candles_resource_internal(
     config: BinanceConfig,
     symbol: str,
     start_date: str,
+    interval_str: str,  # User-friendly format (1m, 5m, 1h, 1d, etc.)
+    table_suffix: str,  # Table name suffix (e.g., "5m", "1h", "DAILY")
 ) -> dlt.resource:
     """
-    Create a DLT resource for daily candlestick data.
+    Internal helper to create a DLT resource for candlestick data with any interval.
 
-    Uses MERGE write disposition because:
-    - Today's incomplete candle updates throughout the day
-    - Re-running historical data won't create duplicates
-    - Small dataset (~365 rows/year) - merge overhead negligible
+    This function contains all the common logic for fetching candles, avoiding code duplication
+    between daily and intraday implementations.
 
     Args:
         config: BinanceConfig instance
         symbol: Trading symbol (e.g., "BTCUSDT")
         start_date: Start date in YYYY-MM-DD format
+        interval_str: Interval in user-friendly format (1m, 5m, 1h, 1d, etc.)
+        table_suffix: Suffix for table name (e.g., "5m" -> "BTCUSDT_5m")
 
     Returns:
-        DLT resource for daily candles
+        DLT resource for the specified interval
     """
+    # Map user-friendly interval to Binance constant name
+    if interval_str not in INTERVAL_MAP:
+        raise ValueError(
+            f"Invalid interval: {interval_str}. "
+            f"Valid intervals: {', '.join(INTERVAL_MAP.keys())}"
+        )
+
+    # Get Binance Client constant (e.g., "1MINUTE")
+    binance_interval_name = INTERVAL_MAP[interval_str]
+
     @dlt.resource(
-        name=f"daily_candles_{symbol.lower()}",
-        table_name=f"{symbol.upper()}_DAILY",
-        write_disposition="merge",                    # Auto-dedup on re-run
-        primary_key=["symbol", "open_time"],          # Composite unique key
+        name=f"{table_suffix.lower()}_candles_{symbol.lower()}",
+        table_name=f"{symbol.upper()}_{table_suffix}",
+        write_disposition="merge",
+        primary_key=["symbol", "open_time"],
     )
-    def _fetch_daily_candles(
+    def _fetch_candles(
         incremental: dlt.sources.incremental[int] = dlt.sources.incremental(
             "open_time",
             initial_value=None
         )
     ) -> Iterator[dict]:
-        """Fetch daily candles with incremental loading."""
+        """Fetch candles with incremental loading."""
 
         client = Client(
             config.api_key,
@@ -293,27 +359,32 @@ def create_daily_candles_resource(
             requests_params={'timeout': 60}
         )
 
-        # Calculate date range (fetch up to yesterday, exclude today's incomplete candle)
-        end_date = datetime.now(timezone.utc) - timedelta(days=1)
-        end_date = end_date.replace(hour=23, minute=59, second=59)
+        # Calculate cutoff time based on interval
+        cutoff_time = _get_cutoff_time(interval_str)
+        cutoff_ts_ms = int(cutoff_time.timestamp() * 1000)
 
         last_open_time = incremental.last_value
 
         if last_open_time:
-            # Incremental: start from next day after last candle
+            # Incremental: start from next interval after last candle
             start_dt = datetime.fromtimestamp(last_open_time / 1000, tz=timezone.utc)
-            start_dt = start_dt + timedelta(days=1)
-            logger.info(f"[{symbol}] Resuming candles from {start_dt.date()}")
+            interval_delta = _parse_interval_to_timedelta(interval_str)
+            start_dt = start_dt + interval_delta
+            logger.info(f"[{symbol}] Resuming {interval_str} candles from {start_dt}")
         else:
             # Initial: use config start_date
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
             start_dt = start_dt.replace(tzinfo=timezone.utc)
-            logger.info(f"[{symbol}] Starting initial candle fetch from {start_date}")
+            logger.info(f"[{symbol}] Starting initial {interval_str} candle fetch from {start_date}")
 
         # Don't fetch if already up-to-date
-        if start_dt.date() > end_date.date():
-            logger.info(f"[{symbol}] Already up-to-date (no new complete candles)")
+        if start_dt.timestamp() * 1000 > cutoff_ts_ms:
+            logger.info(f"[{symbol}] Already up-to-date (no new complete {interval_str} candles)")
             return
+
+        # Get the Binance interval constant from Client class
+        interval_attr = f"KLINE_INTERVAL_{binance_interval_name}"
+        binance_interval = getattr(Client, interval_attr)
 
         # Fetch klines
         try:
@@ -321,14 +392,14 @@ def create_daily_candles_resource(
 
             candles = client.get_historical_klines(
                 symbol=symbol,
-                interval=Client.KLINE_INTERVAL_1DAY,
+                interval=binance_interval,
                 start_str=int(start_dt.timestamp() * 1000),
-                end_str=int(end_date.timestamp() * 1000),
+                end_str=cutoff_ts_ms,
                 limit=1000
             )
 
             if not candles:
-                logger.info(f"[{symbol}] No candles returned")
+                logger.info(f"[{symbol}] No {interval_str} candles returned")
                 return
 
             # Transform to schema
@@ -353,7 +424,7 @@ def create_daily_candles_resource(
                 })
 
             logger.info(
-                f"[{symbol}] Fetched {len(transformed_candles)} candles "
+                f"[{symbol}] Fetched {len(transformed_candles)} {interval_str} candles "
                 f"({transformed_candles[0]['date']} to {transformed_candles[-1]['date']})"
             )
 
@@ -368,7 +439,37 @@ def create_daily_candles_resource(
             logger.error(f"[{symbol}] Unexpected error: {e}", exc_info=True)
             return
 
-    return _fetch_daily_candles
+    return _fetch_candles
+
+
+def create_daily_candles_resource(
+    config: BinanceConfig,
+    symbol: str,
+    start_date: str,
+) -> dlt.resource:
+    """
+    Create a DLT resource for daily candlestick data.
+
+    Uses MERGE write disposition because:
+    - Today's incomplete candle updates throughout the day
+    - Re-running historical data won't create duplicates
+    - Small dataset (~365 rows/year) - merge overhead negligible
+
+    Args:
+        config: BinanceConfig instance
+        symbol: Trading symbol (e.g., "BTCUSDT")
+        start_date: Start date in YYYY-MM-DD format
+
+    Returns:
+        DLT resource for daily candles
+    """
+    return _create_candles_resource_internal(
+        config=config,
+        symbol=symbol,
+        start_date=start_date,
+        interval_str="1d",
+        table_suffix="DAILY"
+    )
 
 
 @dlt.source
@@ -398,5 +499,105 @@ def binance_daily_candles(
     resources = []
     for symbol in symbols:
         resources.append(create_daily_candles_resource(config, symbol, start_date))
+
+    return resources
+
+
+def create_intraday_candles_resource(
+    config: BinanceConfig,
+    symbol: str,
+    start_date: str,
+    interval: str,
+) -> dlt.resource:
+    """
+    Create a DLT resource for intraday candlestick data.
+
+    Supports any Binance interval: 1m, 5m, 15m, 30m, 1h, 4h, etc.
+    Uses MERGE write disposition for idempotent loads and handling incomplete candles.
+
+    Args:
+        config: BinanceConfig instance
+        symbol: Trading symbol (e.g., "BTCUSDT")
+        start_date: Start date in YYYY-MM-DD format
+        interval: Interval string (1m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h)
+
+    Returns:
+        DLT resource for the specified interval
+
+    Examples:
+        >>> # 5-minute candles for BTCUSDT
+        >>> resource = create_intraday_candles_resource(
+        ...     config, "BTCUSDT", "2024-01-01", "5m"
+        ... )
+        >>> # 1-hour candles for ETHUSDT
+        >>> resource = create_intraday_candles_resource(
+        ...     config, "ETHUSDT", "2024-01-01", "1h"
+        ... )
+    """
+    return _create_candles_resource_internal(
+        config=config,
+        symbol=symbol,
+        start_date=start_date,
+        interval_str=interval,
+        table_suffix=interval
+    )
+
+
+@dlt.source
+def binance_intraday_candles(
+    config: BinanceConfig,
+    interval: str,
+    symbols: Optional[List[str]] = None,
+    start_date: Optional[str] = None,
+):
+    """
+    DLT source for intraday candlestick data.
+
+    Fetches OHLCV candles at specified interval (1m, 5m, 15m, 30m, 1h, etc.).
+    Uses merge write disposition for idempotent loads.
+
+    Args:
+        config: BinanceConfig instance
+        interval: Interval string (1m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h)
+        symbols: List of symbols to fetch (defaults to config.symbols)
+        start_date: Start date in YYYY-MM-DD format (defaults to config.historical_start_date)
+
+    Returns:
+        DLT source with intraday candle resources (one per symbol)
+
+    Examples:
+        >>> # Fetch 5-minute candles for all configured symbols
+        >>> config = BinanceConfig()
+        >>> source = binance_intraday_candles(config, interval="5m")
+        >>>
+        >>> # Fetch 1-minute candles for specific symbols
+        >>> source = binance_intraday_candles(
+        ...     config, interval="1m", symbols=["BTCUSDT", "ETHUSDT"]
+        ... )
+        >>>
+        >>> # Run pipeline
+        >>> pipeline = dlt.pipeline(
+        ...     pipeline_name="binance_intraday",
+        ...     destination="filesystem",
+        ...     dataset_name="binance_5m"
+        ... )
+        >>> pipeline.run(source, loader_file_format="parquet")
+    """
+    symbols = symbols or config.symbols
+    start_date = start_date or config.historical_start_date
+
+    # Validate interval
+    if interval not in INTERVAL_MAP:
+        raise ValueError(
+            f"Invalid interval: {interval}. "
+            f"Valid intervals: {', '.join(INTERVAL_MAP.keys())}"
+        )
+
+    # Create one resource per symbol for independent processing
+    resources = []
+    for symbol in symbols:
+        resources.append(
+            create_intraday_candles_resource(config, symbol, start_date, interval)
+        )
 
     return resources
