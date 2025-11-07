@@ -2,9 +2,11 @@
 
 REFACTORED: This is now a thin wrapper around cli.stream.execute_stream().
 The business logic has been extracted for better testability and reusability.
+Now uses Rich for professional CLI output.
 """
 
 from ..cli import StreamParams, execute_stream
+from ..cli.display import display_stream_info, display_stream_result
 
 
 def run_realtime_pipeline(
@@ -45,41 +47,14 @@ def run_realtime_pipeline(
         destination=destination,
     )
 
-    # Display info (keeping backward compatibility)
-    print(f"Starting real-time streaming pipeline for: {params.symbols}")
-    print(f"Destination: {params.destination}")
-    print(f"Buffer size: {params.buffer_size}")
-    if params.max_batches:
-        print(f"Max batches: {params.max_batches}")
-    print("Press Ctrl+C to stop gracefully\n")
+    # Display info with Rich formatting
+    display_stream_info(params)
 
     # Execute stream
     result = execute_stream(params, setup_signal_handlers=True)
 
-    # Display results (keeping backward compatibility)
-    print(f"\n{'='*60}")
-    if result.success:
-        print("Stream completed successfully!")
-    else:
-        print("Stream FAILED!")
-    print(f"{'='*60}")
-
-    print(f"\nTotal batches processed: {result.batches_processed}")
-    print(f"Approximate records: {result.records_count:,}")
-    print(f"Duration: {result.duration_seconds:.2f} seconds")
-
-    if result.output_path:
-        print(f"Output path: {result.output_path}")
-
-    if result.warnings:
-        print("\nWarnings:")
-        for warning in result.warnings:
-            print(f"  - {warning}")
-
-    if result.error:
-        print(f"\nError: {result.error}")
-
-    print("\nPipeline stopped.")
+    # Display results with Rich formatting
+    display_stream_result(result)
 
     return result
 
