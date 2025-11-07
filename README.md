@@ -18,7 +18,7 @@ A comprehensive Python library for downloading and streaming Binance tick data u
 ./start_dagster.sh
 ```
 
-See [DAGSTER_SETUP_SUMMARY.md](DAGSTER_SETUP_SUMMARY.md) for complete details.
+See [Dagster Setup Summary](specs/implementations/DAGSTER_SETUP_SUMMARY.md) for complete details.
 
 ## Features
 
