@@ -10,7 +10,7 @@ from .models import (
     DataSummary,
 )
 from .download import execute_download
-from .stream import execute_stream, request_shutdown, reset_shutdown_flag
+from .stream import execute_stream, request_shutdown, reset_shutdown_flag, shutdown_requested
 from .validate import execute_validate
 from .list_data import execute_list_data
 
@@ -28,6 +28,7 @@ __all__ = [
     "execute_stream",
     "request_shutdown",
     "reset_shutdown_flag",
+    "shutdown_requested",
     "execute_validate",
     "execute_list_data",
 ]

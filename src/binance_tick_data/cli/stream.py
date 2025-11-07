@@ -33,6 +33,15 @@ def reset_shutdown_flag():
     _shutdown_requested = False
 
 
+def shutdown_requested() -> bool:
+    """Check if shutdown has been requested.
+
+    Returns:
+        True if shutdown was requested, False otherwise.
+    """
+    return _shutdown_requested
+
+
 def execute_stream(
     params: StreamParams,
     config_factory: Optional[Callable[[StreamParams], BinanceConfig]] = None,
