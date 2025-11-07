@@ -437,7 +437,7 @@ def display_data_list(summaries: List[DataSummary], summary_mode: bool = False) 
         console.print("[bold cyan]DATA SUMMARY[/bold cyan]\n")
 
         table = Table(show_header=True, box=None)
-        table.add_column("Table", style="cyan", no_wrap=True)
+        table.add_column("Symbol", style="cyan", no_wrap=True)
         table.add_column("Records", justify="right")
         table.add_column("Date Range")
         table.add_column("Size", justify="right")
@@ -464,20 +464,20 @@ def display_data_list(summaries: List[DataSummary], summary_mode: bool = False) 
 
         # Totals
         console.print()
-        console.print(f"[bold]Total:[/bold] {len(summaries)} tables, "
+        console.print(f"[bold]Total:[/bold] {len(summaries)} symbols, "
                      f"{total_records:,} records, "
                      f"{total_size / (1024 * 1024):.1f} MB")
 
     else:
-        # Detailed view - one panel per table
-        console.print(f"[bold cyan]AVAILABLE DATA ({len(summaries)} tables)[/bold cyan]\n")
+        # Detailed view - one panel per symbol
+        console.print(f"[bold cyan]AVAILABLE DATA ({len(summaries)} symbols)[/bold cyan]\n")
 
         for summary in summaries:
             table = Table(show_header=False, box=None, padding=(0, 2))
             table.add_column("Key", style="cyan", width=15)
             table.add_column("Value", style="white")
 
-            table.add_row("Table", f"[bold]{summary.symbol}[/bold]")
+            table.add_row("Symbol", f"[bold]{summary.symbol}[/bold]")
             table.add_row("Records", f"{summary.record_count:,}")
             
             if summary.start_date:
