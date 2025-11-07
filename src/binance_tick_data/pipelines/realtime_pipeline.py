@@ -1,20 +1,10 @@
-"""Pipeline for streaming real-time Binance tick data."""
+"""Pipeline for streaming real-time Binance tick data.
 
-import dlt
-from .. import BinanceConfig, binance_realtime_data
-import signal
-import sys
+REFACTORED: This is now a thin wrapper around cli.stream.execute_stream().
+The business logic has been extracted for better testability and reusability.
+"""
 
-
-# Global flag for graceful shutdown
-shutdown_flag = False
-
-
-def signal_handler(sig, frame):
-    """Handle Ctrl+C for graceful shutdown."""
-    global shutdown_flag
-    print("\n\nShutdown signal received. Finishing current batch...")
-    shutdown_flag = True
+from ..cli import StreamParams, execute_stream
 
 
 def run_realtime_pipeline(
@@ -26,65 +16,72 @@ def run_realtime_pipeline(
     """
     Run the real-time streaming pipeline.
 
+    NOTE: This function is now a thin wrapper for backward compatibility.
+    Consider using cli.stream.execute_stream() directly for new code.
+
     Args:
         symbols: List of symbols to stream (e.g., ["BTCUSDT", "ETHUSDT"])
         destination: Destination type (default: "duckdb")
-        dataset_name: Dataset name in the destination
+        dataset_name: Dataset name in the destination (deprecated, uses "binance_realtime")
         max_batches: Maximum number of batches to process (None = infinite)
+
+    Returns:
+        StreamResult object with success status and metrics
     """
-    # Set up signal handler for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
+    # Get symbols from config if not provided
+    if symbols is None:
+        from ..config import BinanceConfig
+        config = BinanceConfig()
+        symbols = config.symbols
+        buffer_size = config.stream_buffer_size
+    else:
+        buffer_size = 100  # Default
 
-    # Initialize configuration
-    config = BinanceConfig()
-
-    # Override with provided parameters
-    if symbols:
-        config.symbols = symbols
-
-    print(f"Starting real-time streaming pipeline for: {config.symbols}")
-    print(f"Destination: {destination} (dataset: {dataset_name})")
-    print(f"Buffer size: {config.stream_buffer_size}")
-    print("Press Ctrl+C to stop gracefully\n")
-
-    # Create the pipeline
-    pipeline = dlt.pipeline(
-        pipeline_name="binance_realtime",
+    # Create params
+    params = StreamParams(
+        symbols=symbols,
+        max_batches=max_batches,
+        buffer_size=buffer_size,
         destination=destination,
-        dataset_name=dataset_name,
     )
 
-    # Get the source
-    source = binance_realtime_data(config, symbols)
+    # Display info (keeping backward compatibility)
+    print(f"Starting real-time streaming pipeline for: {params.symbols}")
+    print(f"Destination: {params.destination}")
+    print(f"Buffer size: {params.buffer_size}")
+    if params.max_batches:
+        print(f"Max batches: {params.max_batches}")
+    print("Press Ctrl+C to stop gracefully\n")
 
-    # Stream data continuously
-    batch_count = 0
+    # Execute stream
+    result = execute_stream(params, setup_signal_handlers=True)
 
-    try:
-        for load_info in pipeline.run(source, loader_file_format="parquet"):
-            batch_count += 1
-            print(f"\n{'='*60}")
-            print(f"Batch {batch_count} processed at: {load_info.started_at}")
-            print(f"{'='*60}")
+    # Display results (keeping backward compatibility)
+    print(f"\n{'='*60}")
+    if result.success:
+        print("Stream completed successfully!")
+    else:
+        print("Stream FAILED!")
+    print(f"{'='*60}")
 
-            # Print batch statistics
-            for package in load_info.load_packages:
-                for table in package.jobs.get("completed_jobs", []):
-                    print(f"  {table.job_file_info.table_name}: Loaded successfully")
+    print(f"\nTotal batches processed: {result.batches_processed}")
+    print(f"Approximate records: {result.records_count:,}")
+    print(f"Duration: {result.duration_seconds:.2f} seconds")
 
-            # Check if we should stop
-            if shutdown_flag or (max_batches and batch_count >= max_batches):
-                print("\nStopping pipeline...")
-                break
+    if result.output_path:
+        print(f"Output path: {result.output_path}")
 
-    except KeyboardInterrupt:
-        print("\n\nInterrupted by user. Exiting...")
-    except Exception as e:
-        print(f"\nError in streaming pipeline: {e}")
-        raise
-    finally:
-        print(f"\nTotal batches processed: {batch_count}")
-        print("Pipeline stopped.")
+    if result.warnings:
+        print("\nWarnings:")
+        for warning in result.warnings:
+            print(f"  - {warning}")
+
+    if result.error:
+        print(f"\nError: {result.error}")
+
+    print("\nPipeline stopped.")
+
+    return result
 
 
 def main():

@@ -1,7 +1,11 @@
-"""Pipeline for downloading historical Binance tick data."""
+"""Pipeline for downloading historical Binance tick data.
 
-import dlt
-from .. import BinanceConfig, binance_historical_data
+REFACTORED: This is now a thin wrapper around cli.download.execute_download().
+The business logic has been extracted for better testability and reusability.
+"""
+
+from datetime import datetime, date as date_type
+from ..cli import DownloadParams, execute_download
 
 
 def run_historical_pipeline(
@@ -14,68 +18,88 @@ def run_historical_pipeline(
     """
     Run the historical data pipeline.
 
+    NOTE: This function is now a thin wrapper for backward compatibility.
+    Consider using cli.download.execute_download() directly for new code.
+
     Args:
         symbols: List of symbols to fetch (e.g., ["BTCUSDT", "ETHUSDT"])
-        start_date: Start date in YYYY-MM-DD format
+        start_date: Start date in YYYY-MM-DD format or date object
         destination: Destination type (default: "duckdb")
-        dataset_name: Dataset name in the destination
+        dataset_name: Dataset name in the destination (deprecated, uses "binance_historical")
         max_records: Maximum number of records to fetch per symbol (None = unlimited)
+
+    Returns:
+        DownloadResult object with success status and metrics
     """
-    # Initialize configuration
-    config = BinanceConfig()
+    # Convert parameters to DownloadParams
+    if symbols is None:
+        from ..config import BinanceConfig
+        config = BinanceConfig()
+        symbols = config.symbols
 
-    # Override with provided parameters
-    if symbols:
-        config.symbols = symbols
-    if start_date:
-        config.historical_start_date = start_date
-    if max_records:
-        config.historical_max_records = max_records
+    # Parse start_date
+    if start_date is None:
+        from ..config import BinanceConfig
+        config = BinanceConfig()
+        start_date = config.historical_start_date
 
-    print(f"Starting historical data pipeline for: {config.symbols}")
-    print(f"Start date: {config.historical_start_date}")
-    if config.historical_max_records:
-        print(f"Max records per symbol: {config.historical_max_records:,}")
-    print(f"Destination: {destination} (dataset: {dataset_name})")
+    if isinstance(start_date, str):
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+    elif isinstance(start_date, date_type):
+        start_date_obj = start_date
+    else:
+        raise ValueError(f"Invalid start_date type: {type(start_date)}")
 
-    # Create the pipeline
-    pipeline = dlt.pipeline(
-        pipeline_name="binance_pipeline",
+    # Create params
+    params = DownloadParams(
+        symbols=symbols,
+        start_date=start_date_obj,
+        end_date=None,  # Will default to today
+        max_records=max_records,
         destination=destination,
-        dataset_name=dataset_name,
     )
 
-    # Load the data
-    source = binance_historical_data(config, symbols, start_date)
+    # Display info (keeping backward compatibility with print output)
+    print(f"Starting historical data pipeline for: {params.symbols}")
+    print(f"Start date: {params.start_date}")
+    if params.max_records:
+        print(f"Max records per symbol: {params.max_records:,}")
+    print(f"Destination: {params.destination}")
 
-    # Run the pipeline with incremental loading
-    # This will write data in chunks instead of all at once
-    load_info = pipeline.run(
-        source,
-        write_disposition="append",
-        loader_file_format="parquet"
-    )
+    # Execute download
+    result = execute_download(params)
 
-    # Print statistics
-    print("\n" + "=" * 60)
-    print("Pipeline completed successfully!")
-    print("=" * 60)
-    print(f"\nLoad info:\n{load_info}")
+    # Display results (keeping backward compatibility)
+    if result.success:
+        print("\n" + "=" * 60)
+        print("Pipeline completed successfully!")
+        print("=" * 60)
+        print(f"\nRecords downloaded: {result.records_count:,}")
+        print(f"Duration: {result.duration_seconds:.2f} seconds")
+        print(f"Throughput: {result.records_per_second:.0f} records/second")
+        print(f"\nOutput path: {result.output_path}")
 
-    # Print table statistics
-    print("\nTable statistics:")
-    for table_name in ["trades", "agg_trades", "order_book_snapshots"]:
-        try:
-            with pipeline.sql_client() as client:
-                with client.execute_query(
-                    f"SELECT COUNT(*) as count FROM {dataset_name}.{table_name}"
-                ) as cursor:
-                    count = cursor.fetchone()[0]
-                    print(f"  {table_name}: {count:,} records")
-        except Exception as e:
-            print(f"  {table_name}: Could not retrieve count ({e})")
+        if result.symbols_processed:
+            print(f"\nSymbols processed: {', '.join(result.symbols_processed)}")
+        if result.symbols_failed:
+            print(f"Symbols failed: {', '.join(result.symbols_failed)}")
 
-    return load_info
+        if result.metadata.get('symbol_counts'):
+            print("\nPer-symbol counts:")
+            for symbol, count in result.metadata['symbol_counts'].items():
+                print(f"  {symbol}: {count:,} records")
+
+        if result.warnings:
+            print("\nWarnings:")
+            for warning in result.warnings:
+                print(f"  - {warning}")
+    else:
+        print("\n" + "=" * 60)
+        print("Pipeline FAILED!")
+        print("=" * 60)
+        print(f"\nError: {result.error}")
+
+    return result
 
 
 def main():
