@@ -4,7 +4,7 @@ This module provides formatted, color-coded output using the Rich library.
 Separates presentation logic from business logic for clean architecture.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
