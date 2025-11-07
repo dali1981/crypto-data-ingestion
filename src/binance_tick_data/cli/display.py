@@ -437,7 +437,7 @@ def display_data_list(summaries: List[DataSummary], summary_mode: bool = False) 
         console.print("[bold cyan]DATA SUMMARY[/bold cyan]\n")
 
         table = Table(show_header=True, box=None)
-        table.add_column("Symbol", style="cyan", no_wrap=True)
+        table.add_column("Table", style="cyan", no_wrap=True)
         table.add_column("Records", justify="right")
         table.add_column("Date Range")
         table.add_column("Size", justify="right")
@@ -477,7 +477,7 @@ def display_data_list(summaries: List[DataSummary], summary_mode: bool = False) 
             table.add_column("Key", style="cyan", width=15)
             table.add_column("Value", style="white")
 
-            table.add_row("Symbol", f"[bold]{summary.symbol}[/bold]")
+            table.add_row("Table", f"[bold]{summary.symbol}[/bold]")
             table.add_row("Records", f"{summary.record_count:,}")
             
             if summary.start_date:

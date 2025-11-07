@@ -44,9 +44,9 @@ def execute_list_data() -> List[DataSummary]:
         # Connect to database
         conn = duckdb.connect(str(db_path), read_only=True)
 
-        # Get all symbol tables (filter for trading pairs)
-        # Trading pair symbols are uppercase like BTCUSDT, ETHUSDT, etc.
-        # Exclude utility tables like agg_trades, order_books, backups, etc.
+        # Get all data tables
+        # Include: Trading pairs (BTCUSDT, ETHUSDT) or aggregated tables (agg_trades)
+        # Exclude: Internal dlt tables (_load, _state), backups
         tables_query = f"""
             SELECT table_name
             FROM information_schema.tables
@@ -54,11 +54,6 @@ def execute_list_data() -> List[DataSummary]:
             AND table_name NOT LIKE '%_load%'
             AND table_name NOT LIKE '%_state%'
             AND table_name NOT LIKE '%backup%'
-            AND table_name NOT LIKE 'agg_trades'
-            AND table_name NOT LIKE 'trades'
-            AND table_name NOT LIKE 'raw_%'
-            AND table_name NOT LIKE 'order_%'
-            AND table_name = UPPER(table_name)  -- Only uppercase tables (trading pairs)
             ORDER BY table_name
         """
         tables = conn.execute(tables_query).fetchall()
