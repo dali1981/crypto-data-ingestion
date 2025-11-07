@@ -57,6 +57,10 @@ dev = [
 ]
 
 [project.scripts]
+# Unified CLI (recommended)
+binance = "binance_tick_data.cli.cli_main:main"
+
+# Legacy console scripts (backward compatibility)
 binance-download = "binance_tick_data.pipelines.historical_pipeline:main"
 binance-download-safe = "binance_tick_data.pipelines.incremental_pipeline:main"
 binance-stream = "binance_tick_data.pipelines.realtime_pipeline:main"
