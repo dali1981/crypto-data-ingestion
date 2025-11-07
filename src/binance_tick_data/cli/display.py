@@ -10,7 +10,14 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
 
-from .models import DownloadParams, DownloadResult, StreamParams, StreamResult
+from .models import (
+    DownloadParams,
+    DownloadResult,
+    StreamParams,
+    StreamResult,
+    ValidationResult,
+    DataSummary,
+)
 
 
 # Create console instance (reused across functions)
@@ -319,3 +326,173 @@ class DownloadProgressManager:
         """Update progress description."""
         if self.task is not None:
             self.progress.update(self.task, description=f"[cyan]{description}[/cyan]")
+
+
+# ============================================================================
+# Validation Display Functions
+# ============================================================================
+
+def display_validation_result(result: ValidationResult) -> None:
+    """
+    Display validation results with colors and formatting.
+
+    Args:
+        result: Validation result to display
+    """
+    console.print()
+
+    if result.success:
+        # Determine overall status
+        if result.has_issues:
+            status_color = "yellow"
+            status_icon = "⚠"
+            status_text = "VALIDATION COMPLETE - ISSUES FOUND"
+        else:
+            status_color = "green"
+            status_icon = "✓"
+            status_text = "VALIDATION COMPLETE - NO ISSUES"
+
+        console.print(Panel(
+            f"[bold {status_color}]{status_icon} {status_text}[/bold {status_color}]",
+            border_style=status_color,
+        ))
+
+        # Summary table
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value")
+
+        table.add_row("Symbols Checked", str(len(result.symbols_checked)))
+        table.add_row("Total Records", f"{result.total_records:,}")
+        table.add_row("Duplicates Found", 
+                     f"[red]{result.duplicate_count:,}[/red]" if result.duplicate_count > 0 
+                     else "[green]0[/green]")
+        table.add_row("Gaps Found",
+                     f"[yellow]{result.gap_count}[/yellow]" if result.gap_count > 0
+                     else "[green]0[/green]")
+        table.add_row("Quality Score", 
+                     f"[green]{result.quality_score:.1f}%[/green]" if result.quality_score >= 95
+                     else f"[yellow]{result.quality_score:.1f}%[/yellow]")
+        table.add_row("Duration", f"{result.duration_seconds:.2f} seconds")
+
+        console.print(table)
+
+        # Show issues if any
+        if result.issues:
+            console.print(f"\n[bold yellow]Issues Found:[/bold yellow]")
+            for issue in result.issues[:20]:  # Limit to first 20
+                issue_type = issue.get('type', 'unknown')
+                symbol = issue.get('symbol', 'N/A')
+                message = issue.get('message', 'No details')
+                
+                if issue_type == "duplicates":
+                    console.print(f"  [red]•[/red] {symbol}: {message}")
+                elif issue_type == "gap":
+                    gap_hours = issue.get('gap_hours', 0)
+                    console.print(f"  [yellow]•[/yellow] {symbol}: Gap of {gap_hours:.1f} hours")
+                else:
+                    console.print(f"  [dim]•[/dim] {symbol}: {message}")
+
+            if len(result.issues) > 20:
+                console.print(f"\n[dim]... and {len(result.issues) - 20} more issues[/dim]")
+
+        # Symbols checked
+        if result.symbols_checked:
+            console.print(f"\n[cyan]Symbols validated:[/cyan] {', '.join(result.symbols_checked)}")
+
+    else:
+        # Failure panel
+        console.print(Panel(
+            "[bold red]✗ VALIDATION FAILED[/bold red]",
+            border_style="red",
+        ))
+
+        if result.issues:
+            for issue in result.issues:
+                console.print(f"[red]Error:[/red] {issue.get('message', 'Unknown error')}")
+
+    console.print()
+
+
+# ============================================================================
+# List Data Display Functions
+# ============================================================================
+
+def display_data_list(summaries: List[DataSummary], summary_mode: bool = False) -> None:
+    """
+    Display list of available data.
+
+    Args:
+        summaries: List of data summaries to display
+        summary_mode: If True, show condensed summary view
+    """
+    console.print()
+
+    if not summaries:
+        console.print("[yellow]No data found in database[/yellow]\n")
+        return
+
+    if summary_mode:
+        # Summary view - compact table
+        console.print("[bold cyan]DATA SUMMARY[/bold cyan]\n")
+
+        table = Table(show_header=True, box=None)
+        table.add_column("Symbol", style="cyan", no_wrap=True)
+        table.add_column("Records", justify="right")
+        table.add_column("Date Range")
+        table.add_column("Size", justify="right")
+
+        total_records = 0
+        total_size = 0
+
+        for summary in summaries:
+            total_records += summary.record_count
+            total_size += summary.size_bytes
+
+            date_range = "N/A"
+            if summary.start_date and summary.end_date:
+                date_range = f"{summary.start_date} to {summary.end_date}"
+
+            table.add_row(
+                summary.symbol,
+                f"{summary.record_count:,}",
+                date_range,
+                f"{summary.size_mb:.1f} MB",
+            )
+
+        console.print(table)
+
+        # Totals
+        console.print()
+        console.print(f"[bold]Total:[/bold] {len(summaries)} symbols, "
+                     f"{total_records:,} records, "
+                     f"{total_size / (1024 * 1024):.1f} MB")
+
+    else:
+        # Detailed view - one panel per symbol
+        console.print(f"[bold cyan]AVAILABLE DATA ({len(summaries)} symbols)[/bold cyan]\n")
+
+        for summary in summaries:
+            table = Table(show_header=False, box=None, padding=(0, 2))
+            table.add_column("Key", style="cyan", width=15)
+            table.add_column("Value", style="white")
+
+            table.add_row("Symbol", f"[bold]{summary.symbol}[/bold]")
+            table.add_row("Records", f"{summary.record_count:,}")
+            
+            if summary.start_date:
+                table.add_row("Start Date", str(summary.start_date))
+            if summary.end_date:
+                table.add_row("End Date", str(summary.end_date))
+            if summary.start_date and summary.end_date:
+                table.add_row("Days of Data", str(summary.days_of_data))
+            
+            table.add_row("Size", f"{summary.size_mb:.1f} MB")
+            
+            if summary.last_updated:
+                table.add_row("Last Updated", summary.last_updated.strftime("%Y-%m-%d %H:%M:%S"))
+
+            console.print(table)
+            console.print()
+
+    console.print()

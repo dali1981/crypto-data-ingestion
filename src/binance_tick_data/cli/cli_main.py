@@ -28,12 +28,17 @@ from binance_tick_data.cli import (
     execute_download,
     StreamParams,
     execute_stream,
+    ValidateParams,
+    execute_validate,
+    execute_list_data,
 )
 from binance_tick_data.cli.display import (
     display_download_info,
     display_download_result,
     display_stream_info,
     display_stream_result,
+    display_validation_result,
+    display_data_list,
     display_error,
     display_warning,
     display_info,
@@ -339,12 +344,43 @@ def validate(
         # Validate date range
         binance validate --start-date 2024-01-01 --end-date 2024-01-31
     """
-    display_error(
-        "Command not yet implemented",
-        "The 'validate' command will be implemented in Phase 6"
-    )
-    console.print("[dim]Coming soon: Data quality validation with gap detection and duplicate checking[/dim]\n")
-    sys.exit(1)
+    try:
+        # Parse dates if provided
+        start_date_obj = None
+        end_date_obj = None
+        if start_date:
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+        if end_date:
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+        # Create params
+        params = ValidateParams(
+            start_date=start_date_obj,
+            end_date=end_date_obj,
+            symbol=symbol,
+        )
+
+        # Execute validation
+        result = execute_validate(params)
+
+        # Output results
+        if json_output:
+            import json
+            print(json.dumps(result.model_dump(), indent=2, default=str))
+        else:
+            display_validation_result(result)
+
+            # Suggest fixes if issues found
+            if result.has_issues and result.success:
+                display_info("Run data quality jobs to fix issues:")
+                console.print("  [yellow]uv run python jobs/run_all_jobs.py --auto[/yellow]")
+                console.print()
+
+        sys.exit(0 if result.success else 1)
+
+    except Exception as e:
+        display_error("Validation failed", str(e))
+        sys.exit(1)
 
 
 @app.command(name="list")
@@ -371,12 +407,23 @@ def list_data(
         # Get JSON output for scripting
         binance list --json
     """
-    display_error(
-        "Command not yet implemented",
-        "The 'list' command will be implemented in Phase 6"
-    )
-    console.print("[dim]Coming soon: List available data with date ranges and statistics[/dim]\n")
-    sys.exit(1)
+    try:
+        # Execute list
+        summaries = execute_list_data()
+
+        # Output results
+        if json_output:
+            import json
+            data = [s.model_dump() for s in summaries]
+            print(json.dumps(data, indent=2, default=str))
+        else:
+            display_data_list(summaries, summary_mode=summary)
+
+        sys.exit(0)
+
+    except Exception as e:
+        display_error("List failed", str(e))
+        sys.exit(1)
 
 
 @app.callback()
