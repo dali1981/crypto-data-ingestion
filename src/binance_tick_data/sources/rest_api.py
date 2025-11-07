@@ -386,55 +386,99 @@ def _create_candles_resource_internal(
         interval_attr = f"KLINE_INTERVAL_{binance_interval_name}"
         binance_interval = getattr(Client, interval_attr)
 
-        # Fetch klines
+        # Loop fetching batches until we reach cutoff time
+        batch_count = 0
+        total_candles = 0
+        current_start_ts = int(start_dt.timestamp() * 1000)
+
         try:
-            _rate_limiter.wait_if_needed(weight=2)  # Klines endpoint weight = 2
+            while True:
+                # Rate limit before API call
+                _rate_limiter.wait_if_needed(weight=2)  # Klines endpoint weight = 2
 
-            candles = client.get_historical_klines(
-                symbol=symbol,
-                interval=binance_interval,
-                start_str=int(start_dt.timestamp() * 1000),
-                end_str=cutoff_ts_ms,
-                limit=1000
-            )
+                # Fetch batch
+                try:
+                    candles = client.get_historical_klines(
+                        symbol=symbol,
+                        interval=binance_interval,
+                        start_str=current_start_ts,
+                        end_str=cutoff_ts_ms,
+                        limit=1000
+                    )
+                except BinanceAPIException as e:
+                    if e.status_code == 429:
+                        _rate_limiter.handle_429()
+                        continue  # Retry after backoff
+                    else:
+                        logger.error(f"[{symbol}] API error: {e}")
+                        return
 
-            if not candles:
-                logger.info(f"[{symbol}] No {interval_str} candles returned")
-                return
+                if not candles:
+                    logger.info(f"[{symbol}] No more data available from Binance")
+                    break
 
-            # Transform to schema
-            transformed_candles = []
-            for candle in candles:
-                open_dt = datetime.fromtimestamp(candle[0] / 1000, tz=timezone.utc)
+                # Check if we've reached cutoff time
+                last_candle_close_ts = candles[-1][6]  # close_time
+                if last_candle_close_ts > cutoff_ts_ms:
+                    # Filter candles to only include those before cutoff
+                    candles = [c for c in candles if c[6] <= cutoff_ts_ms]
 
-                transformed_candles.append({
-                    "symbol": symbol,
-                    "open_time": candle[0],
-                    "open": candle[1],
-                    "high": candle[2],
-                    "low": candle[3],
-                    "close": candle[4],
-                    "volume": candle[5],
-                    "close_time": candle[6],
-                    "quote_volume": candle[7],
-                    "trades": candle[8],
-                    "taker_buy_base": candle[9],
-                    "taker_buy_quote": candle[10],
-                    "date": open_dt.date().isoformat(),
-                })
+                    if not candles:
+                        logger.info(
+                            f"[{symbol}] Reached cutoff time "
+                            f"({cutoff_time.strftime('%Y-%m-%d %H:%M:%S')} UTC)"
+                        )
+                        break
 
-            logger.info(
-                f"[{symbol}] Fetched {len(transformed_candles)} {interval_str} candles "
-                f"({transformed_candles[0]['date']} to {transformed_candles[-1]['date']})"
-            )
+                # Transform to schema
+                transformed_candles = []
+                for candle in candles:
+                    open_dt = datetime.fromtimestamp(candle[0] / 1000, tz=timezone.utc)
 
-            yield transformed_candles
+                    transformed_candles.append({
+                        "symbol": symbol,
+                        "open_time": candle[0],
+                        "open": candle[1],
+                        "high": candle[2],
+                        "low": candle[3],
+                        "close": candle[4],
+                        "volume": candle[5],
+                        "close_time": candle[6],
+                        "quote_volume": candle[7],
+                        "trades": candle[8],
+                        "taker_buy_base": candle[9],
+                        "taker_buy_quote": candle[10],
+                        "date": open_dt.date().isoformat(),
+                    })
 
-        except BinanceAPIException as e:
-            if e.status_code == 429:
-                _rate_limiter.handle_429()
-            logger.error(f"[{symbol}] API error: {e}")
-            return
+                # Update progress tracking
+                batch_count += 1
+                total_candles += len(transformed_candles)
+
+                # Update start time for next iteration (start from next ms after last close_time)
+                current_start_ts = candles[-1][6] + 1
+
+                # Log progress
+                first_candle_time = datetime.fromtimestamp(candles[0][0] / 1000, tz=timezone.utc)
+                last_candle_time = datetime.fromtimestamp(candles[-1][0] / 1000, tz=timezone.utc)
+
+                logger.info(
+                    f"[{symbol}] Batch {batch_count}: {first_candle_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                    f"to {last_candle_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                    f"({len(transformed_candles)} candles, {total_candles} total)"
+                )
+
+                # Yield the batch
+                yield transformed_candles
+
+                # Check if we've reached cutoff after yielding
+                if last_candle_close_ts > cutoff_ts_ms:
+                    logger.info(
+                        f"[{symbol}] Completed: {batch_count} batches, "
+                        f"{total_candles} candles fetched"
+                    )
+                    break
+
         except Exception as e:
             logger.error(f"[{symbol}] Unexpected error: {e}", exc_info=True)
             return
