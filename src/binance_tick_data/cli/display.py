@@ -464,13 +464,13 @@ def display_data_list(summaries: List[DataSummary], summary_mode: bool = False) 
 
         # Totals
         console.print()
-        console.print(f"[bold]Total:[/bold] {len(summaries)} symbols, "
+        console.print(f"[bold]Total:[/bold] {len(summaries)} tables, "
                      f"{total_records:,} records, "
                      f"{total_size / (1024 * 1024):.1f} MB")
 
     else:
-        # Detailed view - one panel per symbol
-        console.print(f"[bold cyan]AVAILABLE DATA ({len(summaries)} symbols)[/bold cyan]\n")
+        # Detailed view - one panel per table
+        console.print(f"[bold cyan]AVAILABLE DATA ({len(summaries)} tables)[/bold cyan]\n")
 
         for summary in summaries:
             table = Table(show_header=False, box=None, padding=(0, 2))
