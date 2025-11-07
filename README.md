@@ -118,37 +118,106 @@ uv run python jobs/run_all_jobs.py --symbol BTCUSDT --auto
 
 ## Quick Start
 
-### 1. Historical Data Download
+### Unified CLI (Recommended)
 
-Download historical tick data for specified symbols:
+The library now provides a unified `binance` command with subcommands:
 
 ```bash
-# Using console script (recommended for first time - limits to 10k records)
-binance-download \
-    --symbols BTCUSDT \
-    --start-date 2024-10-01 \
-    --max-records 10000
+# Download historical data
+binance download --symbols BTCUSDT --start-date 2024-10-01
 
-# Full download (can take a while!)
-binance-download --symbols BTCUSDT ETHUSDT --start-date 2024-10-01
+# Stream real-time data
+binance stream --symbols BTCUSDT ETHUSDT --max-batches 10
 
-# Alternative: using uv run
-uv run binance-download --symbols BTCUSDT --start-date 2024-10-01
+# Validate data quality
+binance validate --symbol BTCUSDT
+
+# List available data
+binance list --summary
+
+# Get help
+binance --help
+binance download --help
+```
+
+**Features:**
+- 🎨 Professional output with colors and tables
+- ✅ Parameter validation with clear error messages
+- 🔍 Dry-run mode to preview operations
+- 📊 JSON output for scripting
+- 📝 Structured logging support
+- ⚡ Progress indicators for long operations
+
+### 1. Historical Data Download
+
+```bash
+# Basic download
+binance download --symbols BTCUSDT --start-date 2024-10-01
+
+# Multiple symbols with date range
+binance download --symbols BTCUSDT ETHUSDT --start-date 2024-01-01 --end-date 2024-01-31
+
+# Test mode with record limit
+binance download --symbols BTCUSDT --start-date 2024-10-01 --max-records 10000
+
+# Dry run to preview
+binance download --symbols BTCUSDT --start-date 2024-01-01 --dry-run
+
+# JSON output for scripting
+binance download --symbols BTCUSDT --start-date 2024-10-01 --json
+
+# With logging
+binance download --symbols BTCUSDT --start-date 2024-10-01 --verbose --log-file app.log
 ```
 
 ### 2. Real-time Streaming
 
-Stream live tick data:
+```bash
+# Stream indefinitely (Ctrl+C to stop)
+binance stream --symbols BTCUSDT ETHUSDT
+
+# Stream limited batches
+binance stream --symbols BTCUSDT --max-batches 10
+
+# With custom buffer size
+binance stream --symbols BTCUSDT --buffer-size 500
+```
+
+### 3. Data Validation
 
 ```bash
-# Using console script
+# Validate all data
+binance validate
+
+# Validate specific symbol
+binance validate --symbol BTCUSDT
+
+# Validate date range
+binance validate --start-date 2024-01-01 --end-date 2024-01-31
+
+# JSON output
+binance validate --json
+```
+
+### 4. List Available Data
+
+```bash
+# Detailed view
+binance list
+
+# Summary view
+binance list --summary
+
+# JSON output for scripting
+binance list --json
+```
+
+### Legacy Commands (Still Available)
+
+```bash
+# Old console scripts (backward compatible)
+binance-download --symbols BTCUSDT --start-date 2024-10-01
 binance-stream --symbols BTCUSDT ETHUSDT
-
-# Stream with limited batches (for testing)
-binance-stream --symbols BTCUSDT --max-batches 10
-
-# Alternative: using uv run
-uv run binance-stream --symbols BTCUSDT ETHUSDT
 ```
 
 ### 3. Query Your Data
