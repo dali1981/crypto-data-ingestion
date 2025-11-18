@@ -99,7 +99,7 @@ Once your data is clean, keep it that way:
 crontab -e
 
 # Add this line (runs at 2 AM daily)
-0 2 * * * cd /Users/mohamedali/trading_project/dlt-starter && uv run python jobs/daily_job.py --symbol BTCUSDT >> /tmp/binance_daily.log 2>&1
+0 2 * * * cd /path/to/binance-tick-data && uv run python jobs/daily_job.py --symbol BTCUSDT >> /tmp/binance_daily.log 2>&1
 ```
 
 ### Manual Daily Run
@@ -217,7 +217,7 @@ uv run python jobs/01_data_quality_assessment.py
 
 ```bash
 # Add to cron (runs at 2 AM daily)
-0 2 * * * cd /Users/mohamedali/trading_project/dlt-starter && uv run python jobs/daily_job.py --symbol BTCUSDT
+0 2 * * * cd /path/to/binance-tick-data && uv run python jobs/daily_job.py --symbol BTCUSDT
 ```
 
 **Weekly Check:**
@@ -274,7 +274,7 @@ uv run python jobs/run_all_jobs.py --symbol BTCUSDT --auto
 
 ```bash
 crontab -e
-# Add: 0 2 * * * cd /Users/mohamedali/trading_project/dlt-starter && uv run python jobs/daily_job.py --symbol BTCUSDT
+# Add: 0 2 * * * cd /path/to/binance-tick-data && uv run python jobs/daily_job.py --symbol BTCUSDT
 ```
 
 **Done!** Your data will be clean and automatically maintained.

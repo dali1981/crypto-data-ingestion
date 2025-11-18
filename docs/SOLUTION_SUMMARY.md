@@ -359,7 +359,7 @@ uv run python jobs/03_fill_gaps.py --symbol BTCUSDT --recent
 crontab -e
 
 # Add:
-0 2 * * * cd /Users/mohamedali/trading_project/dlt-starter && uv run python jobs/daily_job.py --symbol BTCUSDT
+0 2 * * * cd /path/to/binance-tick-data && uv run python jobs/daily_job.py --symbol BTCUSDT
 ```
 
 ---

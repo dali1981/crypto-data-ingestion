@@ -4,7 +4,7 @@ This guide shows how to integrate the Binance tick data with a Kedro project for
 
 ## Database Location
 
-- **Path:** `/Users/mohamedali/trading_project/dlt-starter/binance_pipeline.duckdb`
+- **Path:** `/path/to/binance-tick-data/binance_pipeline.duckdb`
 - **Size:** 8.5 MB
 - **Schema:** `binance_data`
 - **Data:** 110,000 BTCUSDT trades (Oct 1-19, 2025)
@@ -17,10 +17,10 @@ Add to your Kedro project's `requirements.txt`:
 
 ```txt
 # Binance tick data library
-binance-tick-data @ file:///Users/mohamedali/trading_project/dlt-starter
+binance-tick-data @ file:///path/to/binance-tick-data
 
 # Or install from the directory
-# cd /Users/mohamedali/trading_project/dlt-starter && uv pip install -e .
+# cd /path/to/binance-tick-data && uv pip install -e .
 
 # DuckDB support for Kedro
 duckdb>=1.4.1
@@ -73,7 +73,7 @@ Add to `conf/local/credentials.yml`:
 
 ```yaml
 duckdb_credentials:
-  con: "duckdb:////Users/mohamedali/trading_project/dlt-starter/binance_pipeline.duckdb"
+  con: "duckdb:////path/to/binance-tick-data/binance_pipeline.duckdb"
 ```
 
 ### 4. Configure Parameters
@@ -257,7 +257,7 @@ binance_trades_direct:
     type: pandas.ParquetDataset
     filepath: data/01_raw/trades.parquet
   function_kwargs:
-    db_path: "/Users/mohamedali/trading_project/dlt-starter/binance_pipeline.duckdb"
+    db_path: "/path/to/binance-tick-data/binance_pipeline.duckdb"
     symbol: "BTCUSDT"
     days: 18
 ```

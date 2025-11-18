@@ -1,6 +1,12 @@
 # Binance Tick Data Ingestion Library
 
-A comprehensive Python library for downloading and streaming Binance tick data using [dlt (data load tool)](https://dlthub.com/). Supports both historical data acquisition and real-time WebSocket streaming, with local storage in DuckDB/Parquet format.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+A production-grade Python library for acquiring and managing Binance cryptocurrency tick data. Built with [dlt (data load tool)](https://dlthub.com/) for robust ETL pipelines, featuring automated data quality management, real-time streaming, and efficient columnar storage.
+
+**Perfect for:** Algorithmic trading research, backtesting, market microstructure analysis, and quantitative finance applications.
 
 ## 🆕 Dagster Pipeline for Automated Data Acquisition
 
@@ -523,17 +529,45 @@ Contributions welcome! Areas for improvement:
 - [DuckDB Documentation](https://duckdb.org/docs/)
 - [python-binance Library](https://python-binance.readthedocs.io/)
 
-## License
+## 🤝 Contributing
 
-MIT License - See LICENSE file for details
+Contributions are welcome! We're especially interested in:
 
-## Support
+- Support for additional exchanges (Coinbase, Kraken, OKX)
+- New data sources (klines, liquidations, funding rates)
+- Performance optimizations
+- Documentation improvements
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [dlt (data load tool)](https://dlthub.com/) - For the excellent ETL framework
+- [python-binance](https://github.com/sammchardy/python-binance) - For Binance API integration
+- [DuckDB](https://duckdb.org/) - For blazing-fast analytical queries
+- [Dagster](https://dagster.io/) - For pipeline orchestration
+
+## 📞 Support
 
 For issues or questions:
-1. Check the [dlt documentation](https://dlthub.com/docs)
-2. Review Binance API docs for data-specific questions
-3. Open an issue in this repository
+
+1. **Documentation**: Check [docs/](docs/) directory
+2. **Issues**: Open a [GitHub Issue](../../issues)
+3. **Discussions**: Join [GitHub Discussions](../../discussions)
+4. **External Help**:
+   - [dlt documentation](https://dlthub.com/docs)
+   - [Binance API docs](https://binance-docs.github.io/apidocs/spot/en/)
+
+## ⚠️ Disclaimer
+
+This software is for educational and research purposes only. Use at your own risk. The authors are not responsible for any financial losses incurred from using this software. Always test thoroughly before using with real funds.
+
+Binance is a registered trademark. This project is not affiliated with or endorsed by Binance.
 
 ---
 
-Built with [dlt](https://dlthub.com/) - The open-source Python library for data ingestion.
+**Built with** [dlt](https://dlthub.com/) | **Powered by** [DuckDB](https://duckdb.org/) | **Orchestrated by** [Dagster](https://dagster.io/)

@@ -104,8 +104,23 @@ Desktop.ini
 tmp/
 temp/
 
+# Private/development files (keep local, don't commit)
 .claude/
 dev/
-analysis_output
+analysis_output/
+config/
+sample/
+data/
 CLAUDE.md
+README_PORTFOLIO.md
+docs/UPWORK_PROPOSAL.md
+
+# Development scripts (scratch/investigation)
+test_*.py
+analyze_*.py
+explore_*.py
+fix_*.py
+inspect_*.py
+investigate_*.py
+download_october_data.py
 

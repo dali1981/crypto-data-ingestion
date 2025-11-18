@@ -182,7 +182,7 @@ Total: ~7,100 lines of production-ready code + documentation
 
 ### 1. Quick Test (30 seconds)
 ```bash
-cd /Users/mohamedali/trading_project/dlt-starter
+cd /path/to/binance-tick-data
 uv run python examples/simple_streaming_example.py
 ```
 

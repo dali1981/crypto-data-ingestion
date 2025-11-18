@@ -40,7 +40,7 @@ uv add rich
 ### Step 1: Run the Simple Example
 
 ```bash
-cd /Users/mohamedali/trading_project/dlt-starter
+cd /path/to/binance-tick-data
 uv run python examples/simple_streaming_example.py
 ```
 
@@ -445,7 +445,7 @@ ModuleNotFoundError: No module named 'binance_tick_data'
 **Solutions:**
 ```bash
 # Ensure you're in the project directory
-cd /Users/mohamedali/trading_project/dlt-starter
+cd /path/to/binance-tick-data
 
 # Sync dependencies
 uv sync

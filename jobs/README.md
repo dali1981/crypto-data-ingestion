@@ -182,7 +182,7 @@ uv run python jobs/daily_job.py --symbol BTCUSDT
 crontab -e
 
 # Add this line (runs at 2 AM daily)
-0 2 * * * cd /Users/mohamedali/trading_project/dlt-starter && uv run python jobs/daily_job.py --symbol BTCUSDT >> /var/log/binance_daily.log 2>&1
+0 2 * * * cd /path/to/binance-tick-data && uv run python jobs/daily_job.py --symbol BTCUSDT >> /var/log/binance_daily.log 2>&1
 ```
 
 **Systemd Timer Setup:**
