@@ -103,3 +103,9 @@ Desktop.ini
 *.temp
 tmp/
 temp/
+
+.claude/
+dev/
+analysis_output
+CLAUDE.md
+
