@@ -150,18 +150,36 @@ class BinanceRateLimiter:
                 except (ValueError, TypeError):
                     logger.warning(f"Could not parse {used_weight_key}: {headers[used_weight_key]}")
 
-    def handle_429(self) -> None:
+    def handle_rate_limit_error(self, retry_after: Optional[int] = None) -> None:
+        """
+        Handle rate limit error with exponential backoff.
+
+        Implements the RateLimiter Protocol interface.
+
+        Args:
+            retry_after: Seconds to wait before retrying (from API response, optional)
+        """
+        self.handle_429(retry_after)
+
+    def handle_429(self, retry_after: Optional[int] = None) -> None:
         """
         Handle 429 (rate limit exceeded) error with exponential backoff.
 
         Backoff sequence: 2s, 4s, 8s, 16s, 32s, max 60s
+        If retry_after is provided, use that instead.
+
+        Args:
+            retry_after: Seconds to wait before retrying (from API response, optional)
         """
         with self.lock:
-            # Calculate backoff time
-            if self.backoff_count == 0:
-                self.backoff_seconds = 2
+            if retry_after is not None:
+                self.backoff_seconds = retry_after
             else:
-                self.backoff_seconds = min(self.backoff_seconds * 2, self.max_backoff)
+                # Calculate backoff time
+                if self.backoff_count == 0:
+                    self.backoff_seconds = 2
+                else:
+                    self.backoff_seconds = min(self.backoff_seconds * 2, self.max_backoff)
 
             self.backoff_count += 1
 
