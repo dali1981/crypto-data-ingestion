@@ -1,124 +1,21 @@
 # Binance Tick Data Pipeline Configuration
-# This is the single source of truth for all database and pipeline settings
 
 database:
-  # Database connection settings
   db_path: "binance_pipeline.duckdb"
-  catalog_name: ""  # Leave empty - catalog prefix not needed for DuckDB
   schema_name: "binance_data"
-  read_only: true  # Read-only by default - allows concurrent access while jobs write
+  read_only: true
 
 tables:
-  # Core data tables
   agg_trades: "agg_trades"
   trades: "trades"
-  order_book_snapshots: "order_book_snapshots"
   klines: "klines"
-
-  # Derived/computed tables
   dollar_bars: "dollar_bars"
-  volume_bars: "volume_bars"
-  tick_bars: "tick_bars"
-
-  # Real-time tables
-  realtime_trades: "realtime_trades"
-  realtime_order_book: "realtime_order_book"
 
 pipeline:
-  # Processing settings
   default_batch_size: 10000
 
-  # Bar sampling thresholds
-  bar_thresholds:
-    # Dollar bar thresholds (in USD)
-    # Each bar represents approximately this dollar volume
-    dollar_bars:
-      BTCUSDT: 1000000    # $1M per bar for Bitcoin
-      ETHUSDT: 500000     # $500k per bar for Ethereum
-      BNBUSDT: 100000     # $100k per bar for BNB
-      default: 100000     # $100k per bar for other symbols
-
-    # Volume bar thresholds (in base asset units)
-    # Each bar represents approximately this volume
-    volume_bars:
-      BTCUSDT: 10.0       # 10 BTC per bar
-      ETHUSDT: 100.0      # 100 ETH per bar
-      BNBUSDT: 1000.0     # 1000 BNB per bar
-      default: 1000.0     # 1000 units per bar
-
-    # Tick bar sizes (number of ticks)
-    # Each bar contains this many ticks
-    tick_bars:
-      BTCUSDT: 1000       # 1000 ticks per bar
-      ETHUSDT: 1000       # 1000 ticks per bar
-      BNBUSDT: 500        # 500 ticks per bar
-      default: 500        # 500 ticks per bar
-
-# Real-time streaming configuration
-streaming:
-  consumer:
-    buffer_size: 10000
-    update_interval: 0.1
-    symbols:
-      - BTCUSDT
-      - ETHUSDT
-      - BNBUSDT
-    reconnect_delay: 5
-    max_reconnect_attempts: 10
-    batch_callback: true
-    batch_size: 100
-    ping_interval: 20
-    ping_timeout: 10
-
-  order_flow:
-    enabled: true
-    window_size: 60
-    compute_toxicity: true
-    persistence_test: true
-    imbalance_threshold: 0.1
-
-  liquidity:
-    enabled: true
-    window_size: 60
-    depth_levels: 10
-    spread_method: "mid"
-    min_spread_threshold: 0.0001
-
-  volume_profile:
-    enabled: true
-    window_size: 60
-    price_bins: 50
-    vwap_decay: 0.99
-    value_area_percent: 0.70
-
-  trade_intensity:
-    enabled: true
-    window_size: 60
-    burst_zscore_threshold: 3.0
-    ewma_alpha: 0.05
-
-  price_impact:
-    enabled: true
-    window_size: 60
-    regression_window: 100
-    impact_decay_periods: 10
-
-  metrics:
-    windows: [1, 5, 30, 60]
-    publish_interval: 1.0
-    max_history: 3600
-
-  publisher:
-    backend: "memory"
-    redis_url: null
-    max_queue_size: 10000
-    batch_publish: true
-    batch_interval: 0.1
-
-# Environment variable overrides:
-# You can override any setting using environment variables with BINANCE_ prefix
-# Examples:
-#   BINANCE_DATABASE__DB_PATH=/path/to/db.duckdb
-#   BINANCE_DATABASE__SCHEMA_NAME=my_schema
-#   BINANCE_PIPELINE__DEFAULT_BATCH_SIZE=50000
-#   BINANCE_STREAMING__CONSUMER__BUFFER_SIZE=20000
+  # Dollar bar thresholds (in USD per bar)
+  dollar_bar_thresholds:
+    BTCUSDT: 1000000
+    ETHUSDT: 500000
+    default: 100000
